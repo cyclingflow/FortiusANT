@@ -1,8 +1,7 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-18"
-# 2020-11-18    Calibration also supported for 1942 headunit
+__version__ = "2020-11-10"
 # 2020-11-10    Issue 135: React on button press only once corrected
 #               Function Power2Speed() added
 # 2020-11-03    Issue 118: Adjust virtual flywheel according to virtual gearbox
@@ -106,6 +105,8 @@ import random
 import struct
 import sys
 import time
+import re
+import random
 
 import antDongle         as ant
 import debug
@@ -136,8 +137,16 @@ modeStop        = 0         # USB Tacx modes
 modeResistance  = 2
 modeCalibrate   = 3
 
+#mode_Basic          = 0     # Basic Resistance
+#mode_Power          = 1     # Target Power
+#mode_Grade          = 2     # Target Resistance
+
+
+debugSR = False
+
 #-------------------------------------------------------------------------------
 # path to firmware files; since 29-3-2020 in same folder as .py or .exe
+# CF added: power factor definition files (antifier style for 1901 brake)
 #-------------------------------------------------------------------------------
 if getattr(sys, 'frozen', False):
     dirname = sys._MEIPASS                     # pylint: disable=maybe-no-member
@@ -146,6 +155,7 @@ else:
 
 imagic_fw  = os.path.join(dirname, 'tacximagic_1902_firmware.hex')
 fortius_fw = os.path.join(dirname, 'tacxfortius_1942_firmware.hex')
+powerFactors1901_filename = os.path.join(dirname, 'power_calc_factors_custom.Flow.txt')
 
 #-------------------------------------------------------------------------------
 # Class inheritance
@@ -218,6 +228,7 @@ fortius_fw = os.path.join(dirname, 'tacxfortius_1942_firmware.hex')
 # c l s T a c x T r a i n e r           The parent for all trainers
 #-------------------------------------------------------------------------------
 class clsTacxTrainer():
+    _name = 'clsTacxTrainer'
     UsbDevice               = None          # clsHeadUnitLegacy and clsHeadUnitNew only!
     AntDevice               = None          # clsVortexTrainer only!
     OK                      = False
@@ -274,7 +285,7 @@ class clsTacxTrainer():
     SpeedScale              = None          # To be set in sub-class
 
     def __init__(self, clv, Message):
-        if debug.on(debug.Function):logfile.Write ("clsTacxTrainer.__init__()")
+        if debug.on(debug.Function):logfile.Write ("{}.__init__()".format(self._name))
         self.clv             = clv
         self.Message         = Message
         self.OK              = False
@@ -291,13 +302,14 @@ class clsTacxTrainer():
     #---------------------------------------------------------------------------
     @staticmethod                       # pretent to be c++ factory function
     def GetTrainer(clv, AntDevice=None):
-        if debug.on(debug.Function):logfile.Write ("clsTacxTrainer.GetTrainer()")
+        if debug.on(debug.Function):logfile.Write ("{}.GetTrainer()".format(clsTacxTrainer._name))
 
         #-----------------------------------------------------------------------
         # Usually I do not like multiple exit points, but here it's too handy
         #-----------------------------------------------------------------------
         if clv.SimulateTrainer: return clsSimulatedTrainer(clv)
         if clv.Tacx_iVortex:    return clsTacxAntVortexTrainer(clv, AntDevice)
+
             
         #-----------------------------------------------------------------------
         # So we are going to initialize USB
@@ -355,6 +367,8 @@ class clsTacxTrainer():
                     time.sleep(5)
                     msg = "T1902 head unit initialised (iMagic)"
 
+
+
             #-------------------------------------------------------------------
             # unintialised Fortius (as provided by antifier original code)
             #-------------------------------------------------------------------
@@ -406,6 +420,10 @@ class clsTacxTrainer():
         if dev != False:
             if LegacyProtocol:
                 return clsTacxLegacyUsbTrainer(clv, msg, hu, dev)
+            #command line argument used
+            elif clv.Tack_1901Brake:
+                msg += " and 1901 brake"
+                return clsTacx1901UsbTrainer(clv, msg, hu, dev)                
             else:
                 return clsTacxNewUsbTrainer(clv, msg, hu, dev)
         else:
@@ -469,6 +487,8 @@ class clsTacxTrainer():
         self.DraftingFactor = DraftingFactor
 
     def SetUserConfiguration(self, UserWeight, BicycleWeight, BicycleWheelDiameter, GearRatio):
+        #CF: does this ever happen? Send by VT software?
+        print("User configuration Received: User Weight: {} , Bike Weight: {}, WheelDiameter: {}, GearRatio: {}".format(UserWeight, BicycleWeight, BicycleWheelDiameter, GearRatio))
         self.BicycleWeight          = BicycleWeight
         self.BicycleWheelDiameter   = BicycleWheelDiameter
         self.GearRatio              = GearRatio
@@ -505,7 +525,7 @@ class clsTacxTrainer():
     #---------------------------------------------------------------------------
     def Refresh(self, QuarterSecond, TacxMode):
         if debug.on(debug.Function):logfile.Write ( \
-                    'clsTacxTrainer.Refresh(%s, %s)' % (QuarterSecond, TacxMode))
+                    '%s.Refresh(%s, %s)' % (self._name, QuarterSecond, TacxMode))
         #-----------------------------------------------------------------------
         # FIrst get data from the trainer
         #-----------------------------------------------------------------------
@@ -633,7 +653,7 @@ class clsTacxTrainer():
                 self.TargetResistance *= self.DynamicAdjust    # Will be sent
 
         # ----------------------------------------------------------------------
-        # Round after all these calculations
+        # Round/truncate after all these calculations
         # ----------------------------------------------------------------------
         self.TargetPower         = int(self.TargetPower)
         self.TargetResistance    = int(self.TargetResistance)
@@ -675,10 +695,21 @@ class clsTacxTrainer():
     # returns   True/False
     #---------------------------------------------------------------------------
     def CalibrateSupported(self):
-        if self.Headunit in (hu1932, hu1942):       # And perhaps others as well
+        #CF Comment: actually false logic. The calibration feature is not dependent on the headunit, but on the brake unit ...
+        #(as per manual: of which the unit has no knowledge)
+        #Using a 1932 with a 1901 will gave wrong results
+        #Method therefore overwitten in 1901UsbTrainer
+        if self.Headunit == hu1932:                 # And perhaps others as well
             return True
         else:
             return False
+
+    #---------------------------------------------------------------------------
+    # H a s 1901 B r a ke 
+    #---------------------------------------------------------------------------
+    def has1901Brake(self):
+        return False;
+
 
     #---------------------------------------------------------------------------
     # Convert G r a d e T o P o w e r           |  Grade = slope
@@ -715,6 +746,7 @@ class clsTacxTrainer():
     # 
     # Output        TargetPower
     #---------------------------------------------------------------------------
+    # CF improve name: should be Grade2TARGETpower
     def _Grade2Power(self):                                       #Grade2Power#
         if self.UserAndBikeWeight < 70:
             self.UserAndBikeWeight = 75 + 10
@@ -892,9 +924,11 @@ class clsTacxTrainer():
 # Simulate Tacx-trainer
 #-------------------------------------------------------------------------------
 class clsSimulatedTrainer(clsTacxTrainer):
+    _name = 'clsSimulatedTrainer'
+    
     def __init__(self, clv):
         super().__init__(clv, "Simulated Tacx Trainer to test ANT-interface")
-        if debug.on(debug.Function):logfile.Write ("clsSimulatedTrainer.__init__()")
+        if debug.on(debug.Function):logfile.Write ("{}.__init__()".format(self._name))
         self.OK              = True
         self.clv.PowerFactor = 1            # Not applicable for simulation
 
@@ -918,7 +952,7 @@ class clsSimulatedTrainer(clsTacxTrainer):
     # Output:       self.* variables, see next 10 lines
     # --------------------------------------------------------------------------
     def Refresh (self, _QuarterSecond=None, _TacxMode=None):
-        if debug.on(debug.Function):logfile.Write ("clsSimulatedTrainer.Refresh()")
+        if debug.on(debug.Function):logfile.Write ("{}.Refresh()".format(self._name))
         # ----------------------------------------------------------------------
         # Trigger for pedalstroke analysis (PedalEcho)
         # Data for Speed and Cadence Sensor (-Time and -Count)
@@ -982,9 +1016,11 @@ class clsSimulatedTrainer(clsTacxTrainer):
 # Actually, only the data-storage and Refresh() with Grade2Power() is used!
 #-------------------------------------------------------------------------------
 class clsTacxAntVortexTrainer(clsTacxTrainer):
+    _name = 'clsTacxAntVortexTrainer'
+    
     def __init__(self, clv, AntDevice):
         super().__init__(clv, "Pair with Tacx i-Vortex and Headunit")
-        if debug.on(debug.Function):logfile.Write ("clsTacxAntVortexTrainer.__init__()")
+        if debug.on(debug.Function):logfile.Write ("{}.__init__()".format(self._name))
         self.AntDevice         = AntDevice
         self.OK                = True           # The AntDevice is there,
                                                 # the trainer not yet paired!
@@ -1120,7 +1156,7 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
     #---------------------------------------------------------------------------
     # def Refresh(self, QuarterSecond, TacxMode):
     #     super().Refresh(QuarterSecond, TacxMode)
-    #     if debug.on(debug.Function):logfile.Write ("clsTacxAntVortexTrainer.Refresh()")
+    #     if debug.on(debug.Function):logfile.Write ("{}.Refresh()".format(self._name))
     #     pass
 
     #---------------------------------------------------------------------------
@@ -1276,6 +1312,7 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
 # c l s T a c x U s b T r a i n e r
 #-------------------------------------------------------------------------------
 class clsTacxUsbTrainer(clsTacxTrainer):
+    _name = 'clsTacxUsbTrainer'
     #---------------------------------------------------------------------------
     # Convert WheelSpeed --> Speed in km/hr
     # SpeedScale must be defined in sub-class
@@ -1287,7 +1324,7 @@ class clsTacxUsbTrainer(clsTacxTrainer):
     #		factor 301 would be good (8-11-2019)
     #---------------------------------------------------------------------------
     def Wheel2Speed(self):
-        self.SpeedKmh = round(self.WheelSpeed / self.SpeedScale, 1)
+        self.SpeedKmh = round(self.WheelSpeed / self.SpeedScale, 2)
 
     def Speed2Wheel(self, SpeedKmh):
         return int(SpeedKmh * self.SpeedScale)
@@ -1297,7 +1334,7 @@ class clsTacxUsbTrainer(clsTacxTrainer):
     # #---------------------------------------------------------------------------
     # def Refresh(self, QuarterSecond, TacxMode):
     #     super().Refresh(QuarterSecond, TacxMode)
-    #     if debug.on(debug.Function):logfile.Write ("clsTacxUsbTrainer.Refresh()")
+    #     if debug.on(debug.Function):logfile.Write ("{}.Refresh()".format(self._name))
 
     #     # ----------------------------------------------------------------------
     #     # When a button is pressed, the button is returned a number of times,
@@ -1365,8 +1402,8 @@ class clsTacxUsbTrainer(clsTacxTrainer):
         Weight    = 0
 
         if debug.on(debug.Function):
-            logfile.Write ("clsTacxUsbTrainer.SendToTrainer(T=%s, M=%s, P=%s, G=%s, R=%s, W=%s, PE=%s, S=%s, C=%s)" % \
-            (TacxMode, self.TargetMode, self.TargetPower, self.TargetGrade, \
+            logfile.Write ("%s.SendToTrainer(T=%s, M=%s, P=%s, G=%s, R=%s, W=%s, PE=%s, S=%s, C=%s)" % \
+            (self._name, TacxMode, self.TargetMode, self.TargetPower, self.TargetGrade, \
             self.TargetResistance, self.UserAndBikeWeight, self.PedalEcho, \
             self.SpeedKmh, self.Cadence))
 
@@ -1407,6 +1444,9 @@ class clsTacxUsbTrainer(clsTacxTrainer):
             logfile.Console(error)
         else:
             Target = int(Target)
+            #
+            if debugSR: print('send: {}'.format(Target))
+            # 
             data   = self.SendToTrainerUSBData(TacxMode, Calibrate, PedalEcho, Target, Weight)
 
             #-------------------------------------------------------------------
@@ -1431,9 +1471,11 @@ class clsTacxUsbTrainer(clsTacxTrainer):
 # ==> iMagic
 #-------------------------------------------------------------------------------
 class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer):
+    _name = 'clsTacxLegacyUsbTrainer'
+    
     def __init__(self, clv, Message, Headunit, UsbDevice):
         super().__init__(clv, Message)
-        if debug.on(debug.Function):logfile.Write ("clsTacxLegacyUsbTrainer.__init__()")
+        if debug.on(debug.Function):logfile.Write ("{}.__init__()".format(self._name))
         self.Headunit   = Headunit
         self.UsbDevice  = UsbDevice
         self.OK         = True
@@ -1477,8 +1519,8 @@ class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer):
         rtn = int(rtn)
 
         if debug.on(debug.Function):logfile.Write (\
-                "clsTacxLegacyUsbTrainer.TargetPower2Resistance(%s, %s) = %s" % \
-                    (self.TargetPower, self.SpeedKmh, rtn) )
+                "%s.TargetPower2Resistance(%s, %s) = %s" % \
+                    (self._name, self.TargetPower, self.SpeedKmh, rtn) )
         self.TargetResistance = rtn
 
     #---------------------------------------------------------------------------
@@ -1529,7 +1571,7 @@ class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer):
     # returns   Speed, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, Buttons
     #---------------------------------------------------------------------------
     def _ReceiveFromTrainer(self):
-        if debug.on(debug.Function):logfile.Write ("clsTacxLegacyUsbTrainer._ReceiveFromTrainer()")
+        if debug.on(debug.Function):logfile.Write ("{}._ReceiveFromTrainer()".format(self._name))
         #-----------------------------------------------------------------------
         #  Read from trainer
         #-----------------------------------------------------------------------
@@ -1612,15 +1654,630 @@ class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer):
                 (  self.HeartRate, self.Buttons, self.Cadence, self.SpeedKmh, self.TargetResistance, self.CurrentResistance, self.CurrentPower, self.PedalEcho, self.Message) \
                           )
 
+
+#-------------------------------------------------------------------------------
+# c l s T a c x 1901 U s b T r a i n e r
+#-------------------------------------------------------------------------------
+# Tacx-trainer with 1932 interface & USB connection, and 1901 brake
+#-------------------------------------------------------------------------------
+class clsTacx1901UsbTrainer(clsTacxUsbTrainer):
+    _name = 'clsTacxUsb1901Trainer'
+    level4res = {0: 0, 1039: 0, 1299: 1, 1559: 2, 1819: 3, 2078: 4, 2338: 5, 2598: 6, 2858: 7, 3118: 8, 3378: 9, 3767: 10, 4027: 11, 4287: 12, 4677: 13}
+    receivedResValues = level4res.keys()    
+    sendResList=[1900, 2030, 2150, 2300, 2400, 2550, 2700, 2900, 3070, 3200, 3350, 3460, 3600, 3750] #possible resistance value to be transmitted to device
+    #The follwing knots define the piecewise linear approach to powercalculation
+    minimalPower = 4 #Wats
+    userGradeMode = False  # providing a custom file sets this
+    #-------------------------------------------------------------------------------
+    # One can use his/her own factor file generated by power curve script, if values are far off.
+    # However, keep in mind that these emperical values need to be regularized such
+    # that all slopes and all intercepts are monotonically increasing.
+    # This guarantees that increasing levels give monotonically increasing power values,
+    # which certainly helps the consistency of target power control :-)
+    #-------------------------------------------------------------------------------
+    defaultPowerFactors4Level = {    
+        0:  [ 5.3065,	 -29.3480 ],
+        1:  [ 5.6008,	 -33.1000 ],
+        2:  [ 5.9874,	 -37.0000 ],
+        3:  [ 6.6848,	 -43.8130 ],
+        4:  [ 7.5043,	 -51.6000 ],
+        5:  [ 8.45,	     -59.1000 ],
+        6:  [ 9.3906,	 -65.5000 ],
+        7:  [ 10.46,	 -73.1000 ],
+        8:  [ 11.751,	 -80.1000 ],
+        9:  [ 13.015,	 -86.5080 ],
+        10: [ 14.20,	 -94.3000 ],
+        11: [ 15.3,  	-102.4900 ],
+        12: [ 16.55,	-112.0000 ],
+        13: [ 17.763,	-124.1000 ]}
+    defaultGrade4Level = [-4.0, -3.7, -3.4, -2.5, -1.9, -0.7, 0.5, 1.4, 2.9, 4.0, 5.6, 7.4, 8.6, 9.2]
+    defaultPowerCalcKnot = 12
+
+    def __init__(self, clv, Message, Headunit, UsbDevice):
+        super().__init__(clv, Message)
+        if debug.on(debug.Function):logfile.Write ("{}.__init__()".format(self._name))
+        #ORI self.SpeedScale = 301                        # TotalReverse: 289.75        
+        self.SpeedScale = 280.54  #factor used in antifier, so we can use antifier power_curve calibration factors
+        #ORI self.PowerResistanceFactor = 128866 
+        self.PowerResistanceFactor = 138866 # now used
+
+        #Get the powercalc and grade factors
+        self.powerFactors4Level = None
+        if (os.path.exists(powerFactors1901_filename)):
+            self.powerFactors4Level, self.grade4Level, self.UserGradeMode = self._parseAntifierPowerCurveFactors(powerFactors1901_filename)
+        if (None == self.powerFactors4Level):
+            self.powerFactors4Level, self.grade4Level, self.powerCalcKnot = self.defaultPowerFactors4Level, self.defaultGrade4Level, self.DefaultPowerCalcKnot
+        else:
+            self.powerCalcKnot = self._findMinimumKnotPosition()
+            #print(self.powerCalcKnot)
+
+        #check knot positions, power seqence should be monotonically increasing
+        #for resistanceLevel in range(0,14):
+        #    print(resistanceLevel, self._calcPowerAboveKnot(resistanceLevel, self.powerCalcKnot))
+        #    #print(resistanceLevel, self._calcPowerAboveKnot(resistanceLevel, 12)) 
+
+        if (self.UserGradeMode):
+            self.Message += " (user grades)"
+
+        self.Headunit   = Headunit
+        self.UsbDevice  = UsbDevice
+        self.OK         = True
+
+
+    def _parseParameterValue(self, line):
+        parameter, value = line.split("=")
+        value = value.lower().strip() 
+        if (value in ['true', 'yes']): typedValue = True
+        elif (value in ['false', 'no']): typedValue = False
+        else:
+            try:
+                typedValue = float(value)
+            except:
+                try:
+                    typedValue = int(value)
+                except:
+                    typedValue = value
+        return parameter.lower().strip(), typedValue
+
+
+    def _parseAntifierPowerCurveFactors(self, filename):
+        UserGradeMode = True
+        factorFile = open(filename,'r').read().split('\n')
+        powerFactors4 = {}
+        grade4level = []
+        resistanceLevel = 0
+        for line in factorFile:
+            line = line.split("#")[0]#get rid of comments
+            #parameter?
+            if ('=' in line):
+                parameter, value = self._parseParameterValue(line)
+                if (parameter == 'usergrademode'):
+                    if (isinstance(value, bool)):
+                        UserGradeMode = value
+                    else:
+                        if debug.on(debug.Function):logfile.Write ("{}._parseAntifierPowerCurveFactors():"\
+                                                                   "error parsing power factor file {}: Unknown parameter {}.".format(self._name, filename, parameter))
+                        msg = 'Error parsing power factor file {}. Unknown parameter. {}'.format(filename, parameter)                    
+                        logfile.Console(msg)
+                else:
+                    if debug.on(debug.Function):logfile.Write ("{}._parseAntifierPowerCurveFactors():"\
+                                                               "error parsing power factor file {}: Unknown value {}.".format(self._name, filename, value))
+                    msg = 'Error parsing power factor file {}. Unknown value {}.'.format(filename, value)                    
+                    logfile.Console(msg)
+            #power factors definition?                    
+            elif len(line)>0: #skip empty lines, possibly empty last line
+                parts = re.split('[:,]', line)
+                if len(line)>2:
+                    grade, factorA, factorB = parts
+                    powerFactors4[resistanceLevel] = [float(factorA), float(factorB)]
+                    grade4level.append(float(grade))
+                    resistanceLevel += 1
+                else:
+                    if debug.on(debug.Function):logfile.Write ("{}._parseAntifierPowerCurveFactors():"\
+                                                               "error parsing power factor file {}.".format(self._name, filename))
+                    msg = 'Error parsing power factor file {}.'.format(filename)
+                    logfile.Console(msg)
+        if (resistanceLevel!=14):
+            if debug.on(debug.Function):logfile.Write ("{}._parseAntifierPowerCurveFactors():"\
+                                                       "error parsing power factor file {}, {} levels, 14 expected.".format(self._name, filename, resistanceLevel))
+            msg = 'Error parsing power factor file {}: {} levels, 14 expected.'.format(filename, resistanceLevel)
+            logfile.Console(msg)
+            return None, None, UserGradeMode
+        else:
+            return powerFactors4, grade4level, UserGradeMode
+
+
+    #using the current powerfactors, does power satisfy monotonicity constraints?
+    def _hasMonotonicallyIncreasingPower4IncreasingResistance(self, speedKmh):
+        lastPower = self._calcPowerAboveKnot(0, speedKmh)
+        for resistanceLevel in range(1,14):
+            power = self._calcPowerAboveKnot(resistanceLevel, speedKmh)
+            if (power<lastPower):
+                return False
+            lastPower = power
+        return True
+
+
+    # for piecewise linear approximation, one knot position (speed value) is needed 
+    # locates smallest knot position (speed value) that satisfies monotinicity constraints
+    def _findMinimumKnotPosition(self):
+        for speed in range(8, 30, 1):
+            if self._hasMonotonicallyIncreasingPower4IncreasingResistance(speed):
+                return speed
+        if debug.on(debug.Function):logfile.Write ("{} WARNING: current power factors violate monotonicity constraints"\
+                        .format(self._name, filename))
+        msg = "WARNING: current power factors violate monotonicity constraints".format(filename)
+        logfile.Console(msg)
+        return 20
+
+
+    def CalibrateSupported(self):
+        return False #AFAK: this brake does not have auto calibration (no motor)
+
+    def has1901Brake(self):
+        return True
+
+    #---------------------------------------------------------------------------
+    # R e f r e s h
+    #---------------------------------------------------------------------------
+    # Input         Class variables Target***
+    #               QuarterSecond, indicates that 1/4 second since previous
+    #                              for ANTdevices only
+    #               TacxMode, to pass to SendToTrainer()
+    #
+    # Function      Refresh updates the actual values from the trainer
+    #               Then does required calculations
+    #               And finally instructs the trainer what to do
+    #
+    #               It appears more logical to do calculations when inputs change
+    #               but it's done here because some calculations depend on the
+    #               wheelspeed, so must be redone after each _ReceiveFromTrainer()
+    #
+    # Output        Class variables match with Target***
+    #---------------------------------------------------------------------------
+    def Refresh(self, QuarterSecond, TacxMode):
+        if debug.on(debug.Function):logfile.Write ( \
+                    '%s.Refresh(%s, %s)' % (self._name, QuarterSecond, TacxMode))
+        #-----------------------------------------------------------------------
+        # FIrst get data from the trainer
+        #-----------------------------------------------------------------------
+        self._ReceiveFromTrainer()
+
+        #-----------------------------------------------------------------------
+        # Make all variables consistent
+        #-----------------------------------------------------------------------
+
+        #-----------------------------------------------------------------------
+        # Issue 135
+        # Avoid multiple button press when polling faster than button released
+        #-----------------------------------------------------------------------
+        if self.PreviousButtons == 0:
+            # if self.Buttons: print('Button press %s' % self.Buttons)
+            # The button was NOT pressed the previous cycle
+            # Therefore the button is accepted (rising edge)
+            self.PreviousButtons = self.Buttons
+        else:
+            # if self.Buttons: print('Button press %s ignored' % self.Buttons)
+            # Remember the current state of Buttons, must become zero before
+            # a button press is accepted
+            self.PreviousButtons = self.Buttons
+            # Button was pressed previous cycle, so ignore now
+            self.Buttons = 0
+
+        #-----------------------------------------------------------------------
+        # PedalEcho for Speed and Cadence Sensor
+        #-----------------------------------------------------------------------
+        if self.PedalEcho == 1 and self.PreviousPedalEcho == 0:
+            self.PedalEchoCount += 1
+            self.PedalEchoTime   = time.time()
+        self.PreviousPedalEcho = self.PedalEcho
+
+        #-----------------------------------------------------------------------
+        # Calculate Virtual speed applying the digital gearbox
+        # if DOWN has been pressed, we pretend to be riding slower than the
+        #       trainer wheel rotates
+        # if UP has been pressed, we pretend to be faster than the trainer
+        #
+        # Note that Grade2Power() depends on the VirtualSpeed.
+        #-----------------------------------------------------------------------
+        self.VirtualSpeedKmh = self.SpeedKmh * self.PowercurveFactor
+
+        # No negative value defined for ANT message Page25 (#)
+        if self.CurrentPower < 0: self.CurrentPower = 0 
+
+        assert (self.TargetMode in (mode_Power, mode_Grade))
+        if self.TargetMode == mode_Power:
+            self.TargetPower2Resistance()
+
+        elif self.TargetMode == mode_Grade:
+            if (self.UserGradeMode):
+                self.TargetGrade2Resistance()
+            else:
+                self._Grade2Power()
+                self.TargetPower2Resistance()
+                
+        #-----------------------------------------------------------------------
+        # CF NO! at least not for this brake, at this position, moved to above
+        # For all modes: To be implemented by USB-trainers; pass for others
+        #-----------------------------------------------------------------------
+        #self.TargetPower2Resistance()
+
+        #-----------------------------------------------------------------------
+        # Antifier's calibration; valid for USB devices only
+        #                         non-USB classes will set PowerFactor=1
+        # Just for antifier upwards compatibility; usage unknown.
+        #
+        # CF ??? removed for now
+        # CF I dont see how this would benefit antifier compatability in 1901 case
+        # because Target Resistance E= {limited set of integers}
+        # and therefore I dont see why you would want to change self.CurrentResistance.
+        # I also fail to see why you would want to change TargetResistance after
+        # first aligning it with ACTUAL power requested (see call of self.TargetPower2Resistance() above)
+        # It would make more sens if you changed self.CurrentPower only, but BEFORE other updates
+        #-----------------------------------------------------------------------
+        ##if self.clv.PowerFactor:
+        ##    self.TargetResistance  *= self.clv.PowerFactor  # Will be sent
+        ##   
+        ##    self.CurrentResistance /= self.clv.PowerFactor  # Was just received
+        ##    self.CurrentPower      /= self.clv.PowerFactor  # Was just received
+
+
+        # ----------------------------------------------------------------------
+        # Dynamic Adjustment of Resistance CF REMOVED FOR NOW
+        # ----------------------------------------------------------------------
+
+        # ----------------------------------------------------------------------
+        # Round/truncate after all these calculations
+        # ----------------------------------------------------------------------
+        self.TargetPower         = int(self.TargetPower)
+        self.TargetResistance    = int(self.TargetResistance)
+        self.CurrentResistance   = int(self.CurrentResistance)
+        self.CurrentPower        = int(self.CurrentPower)
+        self.SpeedKmh            = round(self.SpeedKmh,1)
+        self.VirtualSpeedKmh     = round(self.VirtualSpeedKmh,1)
+
+        # ----------------------------------------------------------------------
+        # Show the virtual cassette, calculated from a 10 teeth sprocket
+        # CF dont know why this is usefull, but I dont believe it disturbs operation
+        # probably have to dig into issues to see what idea behind virtual gearbox is
+        self.Teeth = int(15 / self.PowercurveFactor)
+            
+        #-----------------------------------------------------------------------
+        # Then send the results to the trainer again
+        #-----------------------------------------------------------------------
+        self.SendToTrainer(QuarterSecond, TacxMode)
+
+
+
+
+    #---------------------------------------------------------------------------
+    # CF We estimate power with
+    # a linear function for this brake (intercept needed), and we will add wheel mass acceleration factor later
+    #---------------------------------------------------------------------------
+    def _calcPowerAboveKnot(self, resistanceLevel, speedKmh):
+        return max(0, int((speedKmh*self.powerFactors4Level[resistanceLevel][0] + \
+                             self.powerFactors4Level[resistanceLevel][1])))
+
+
+    def _calcPower(self, resistanceLevel, speedKmh):
+        zeroSpeedThreshold = 0.1
+        if speedKmh<zeroSpeedThreshold:
+           currentPower = 0
+        else:
+##            if speedKmh<self.powerCalcKnots[resistanceLevel]: # use linear interpolation between (0.1, minimalPower) and (powerCalcKnots[resistanceLevel], powerAtKnot)
+##                powerAtKnot = max(0, int((self.powerCalcKnots[resistanceLevel]*self.powerFactors4Level[resistanceLevel][0] \
+##                                            + self.powerFactors4Level[resistanceLevel][1])))
+##                currentPower = self.minimalPower + (powerAtKnot - self.minimalPower)*(speedKmh - zeroSpeedThreshold)/(self.powerCalcKnots[resistanceLevel] - zeroSpeedThreshold)
+##            else: #use linear approximation 
+##                currentPower = max(0, int((speedKmh*self.powerFactors4Level[resistanceLevel][0] \
+##                                            + self.powerFactors4Level[resistanceLevel][1])))
+            if speedKmh<self.powerCalcKnot: # use linear interpolation between (0.1, minimalPower) and (powerCalcKnots[resistanceLevel], powerAtKnot)
+                powerAtKnot = self._calcPowerAboveKnot(resistanceLevel, self.powerCalcKnot)
+                currentPower = self.minimalPower + (powerAtKnot - self.minimalPower)*(speedKmh - zeroSpeedThreshold)/(self.powerCalcKnot - zeroSpeedThreshold)
+            else: #use linear approximation 
+                currentPower = self._calcPowerAboveKnot(resistanceLevel, speedKmh)
+        return currentPower
+
+
+    # CF suggestion: name change. This gives Power based upon resistance AND SPEED
+    # I originally took al the functions to be primarily power based
+    # The problem originates from the fact that due to use of self.variables,
+    # there are no arguments, which makes understanding refresh much harder.
+    # may be change into
+    # CurrentResistanceAndSpeed2CurrentPower
+    def CurrentResistance2Power(self):
+        if self.CurrentResistance in  self.receivedResValues:
+            resistanceLevel = self.level4res[self.CurrentResistance]
+        else:
+            print('error converting resistance {}'.format(self.CurrentResistance))
+            resistanceLevel = 5
+        self.CurrentPower = self._calcPower(resistanceLevel, self.SpeedKmh)
+        #print('level: {}, speed: {}, power: {}, target resistance: {}, resistance: {}'.format(resistanceLevel, self.SpeedKmh, self.CurrentPower, self.TargetResistance, self.CurrentResistance))
+
+
+    # CF suggestion: this gives TARGET Resistance based upon TargetPower AND wheelspeed
+    # may be change into TargetPowerAndWheelSpeed2TargetResistance
+    # Moreover, it is always called, even in manual grade mode, THIS IS NOW CORRECTED
+    def TargetPower2ResistanceOri(self):
+        # original version
+        rtn        = 0
+        if self.WheelSpeed > 0:
+            rtn = self.TargetPower * self.PowerResistanceFactor / self.WheelSpeed
+            rtn = self.__AvoidCycleOfDeath(rtn)
+        rtn = int(rtn)
+
+        if debug.on(debug.Function):logfile.Write (\
+            "%s.TargetPower2Resistance(%s, %s) = %s" % \
+            (self._name, self.TargetPower, self.WheelSpeed, rtn ))
+
+        self.TargetResistance = rtn
+        #return rtn
+
+
+    def TargetPower2Resistance(self):
+        #version principally identical to Antifier implementation
+        #cycle of death avoided through threshold for minimum speed
+        targetResistanceLevel = 0
+        speedKmh = max(6, self.SpeedKmh)
+        closest = 1000.0**2
+        for resistanceLevel in range(0,14, 1): 
+            powerAtLevel = self._calcPower(resistanceLevel, speedKmh)
+            #power2 not needed, abs sufficient, just a typical least squares trick
+            if (self.TargetPower - powerAtLevel)**2 < closest:
+                targetResistanceLevel = resistanceLevel
+                closest = ((self.TargetPower - powerAtLevel)**2)
+            #logfile.Write ('{} {} '.format(resistanceLevel, powerAtLevel, closest))                        
+        self.TargetResistance = self.sendResList[targetResistanceLevel]
+        #if debug.on(debug.Application):logfile.Write ( \
+        #            '{}.TargetPower2Resistance {} = {}, original {})' \
+        #            .format(self._name, self.TargetPower, self.TargetResistance, self.TargetPower2ResistanceOri()))
+
+
+
+    #CF TargetGrade2TargetResistance?    
+    def TargetGrade2Resistance(self):
+        #CF like Antifier, we simply use definitions in power_curve file, and abandon reality requirement
+        #can be easily tuned in power curve file
+        #NB functionality of 1901 brake is insufficient to cover reality : no motor, realitively low max brake 
+        resistanceLevel = 0
+        for resistanceLevel, grade in enumerate(self.grade4Level):
+            if grade >= self.TargetGrade: 
+               self.TargetResistance = self.sendResList[resistanceLevel]
+               return
+        self.TargetResistance = self.sendResList[-1]            
+        #print(resistanceLevel, self.TargetResistance)
+
+
+    #---------------------------------------------------------------------------
+    # Limit Resistance to avoid the Cycle of Death
+    #
+    # This a phenomenon occuring in ERGmode (constant power, resistance depends
+    # on (wheel)speed): if you get tired at a certain power and cycle slower, 
+    # the resistance keeps going up untill Power/0 = infinite and you "die".
+    # Starting-up will be quite impossible as well: Power/0.1 is very high!
+    # ==> 1: Resistance must be limitted to a maximum at low wheel-speeds
+    #
+    # Also, Fortius (I do not know for others) does not perform well for high
+    # resistances at low wheelspeed. Practical tests have shown a maximum
+    # of Resistance = 4500 at 10km/hr. Higher resistances cause stuttering.
+    # ==> 2: Same rule, other reason.
+    #
+    # The protection is that when Speed droppes below 10km/hr, the resistance is
+    # limitted. And, if you do not like this, avoid going into this protection,
+    # by keeping the wheelspeed above 10km/hr in ERG-mode rides.
+    #
+    # Note that, the protection factor must be Speed (not Cadence), since that
+    # is used in Power2Resistance. Note that, Speed may drop faster than Cadance!
+    #
+    # Note also that, the figures are empirically determined.
+    # option 1. R=6000 at 15km/hr ==> 6000 / 128866 * (15 * 301) = 210Watt
+    # option 2. R=4500 at 10km/hr ==> 4500 / 128866 * (10 * 301) = 100Watt
+    #
+    # The minium of 1500 is chosen above calibration level to avoid that the
+    # brake is going to spinn (negative power mode).
+    #
+    # It means that the required power is maintained untill 10 km/hr, then drops
+    # to 100Watt and gradually runs down to minimum at zero-speed.
+    # Also, when required power would be 300Watt and you speed up from
+    # 1...10km/hr, the power gradually increases to 100Watt untill above 10km/hr
+    # the real power is set.
+    #
+    # With all this said, a similar function should be present in the LegacyUSB
+    # class; or function generalized and constants 1500 and 4500 (6000) adjusted.
+    #---------------------------------------------------------------------------
+    def __AvoidCycleOfDeath(self, Resistance):
+        if self.TargetMode == mode_Power and self.SpeedKmh <= 10 and Resistance >= 6000:
+            Resistance = int(1500 + self.SpeedKmh * 300)
+#           print('__AvoidCycleOfDeath', self.SpeedKmh, Resistance)
+
+        return Resistance
+
+    #---------------------------------------------------------------------------
+    # S e n d T o T r a i n e r D a t a
+    #---------------------------------------------------------------------------
+    # input     Mode, Target, Pedecho, Weight, Calibrate
+    #
+    # function  Called by SendToTrainer()
+    #           Compose buffer to be sent to trainer
+    #
+    # returns   data
+    #---------------------------------------------------------------------------
+    def SendToTrainerUSBData(self, TacxMode, Calibrate, PedalEcho, Target, Weight):
+        #Do we need TacxMode, Calibrate, PedalEcho, Weight?
+        Target = int(min(0x7fff, Target))
+        #-----------------------------------------------------------------------
+        # Data buffer depends on trainer_type
+        # Refer to TotalReverse; "Newer protocol"
+        #-----------------------------------------------------------------------
+        fControlCommand     = sc.unsigned_int       # 0...3
+        fTarget             = sc.short              # 4, 5      Resistance for Power=50...1000Watt
+        fPedalecho          = sc.unsigned_char      # 6
+        fFiller7            = sc.pad                # 7
+        fMode               = sc.unsigned_char      # 8         Idle=0, Ergo/Slope=2, Calibrate/speed=3
+        fWeight             = sc.unsigned_char      # 9         0x0a for 'almost no fly wheel' or
+                                                            # weight of rider+bike in kg for 
+                                                            # 'realistic' simulation of riders mass
+                                                            # TotalReverse, updated 2020-01-04
+        fCalibrate          = sc.unsigned_short     # 10, 11    Depends on mode
+
+        #-----------------------------------------------------------------------
+        # Build data buffer to be sent to trainer (legacy or new)
+        #-----------------------------------------------------------------------
+        format = sc.no_alignment + fControlCommand + fTarget + fPedalecho + fFiller7 + fMode +    fWeight + fCalibrate
+        data   = struct.pack (format, 0x00010801,     Target,   PedalEcho,          TacxMode,  int(Weight),  Calibrate)
+        return data
+
+
+
+
+    #---------------------------------------------------------------------------
+    # R e c e i v e F r o m T r a i n e r
+    #---------------------------------------------------------------------------
+    # input     usbDevice
+    #
+    # function  Read status from trainer
+    #
+    # returns   Speed, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, Buttons
+    #
+    #---------------------------------------------------------------------------
+    def _ReceiveFromTrainer(self):
+        if debug.on(debug.Function):logfile.Write ("{}._ReceiveFromTrainer()".format(self._name))
+        #-----------------------------------------------------------------------
+        # Read from trainer
+        # 64 bytes are expected
+        # 48 bytes are returned by some trainers
+        # 24 bytes are sometimes returned (T1932, Gui Leite 2020-06-11) and
+        #           seem to be incomplete buffers and are ignored.
+        # Also my own tacx returns empty buffers, very seldomly though
+        #-----
+        # TotalReverse, 2020-09-27:
+        # One more Information: the brake only sends an answer after receiving a
+        # command from the head unit. And the 1942 head unit only sends a command
+        # to the brake after receiving a frame from the host.
+        # You first have to increase the send rate to receive more frames
+        # (answers) from the brake.
+        #
+        # 2020-09-29 Practice shows that retry works; if not a message is given.
+        # Then the buffer is ignored to avoid returning wrong data. The outer
+        # loop will send a command and then receive again.
+        # Perhaps just ignoring the short buffer would be enough as well, but
+        # this has been tested and found working so I leave it.
+        #-----------------------------------------------------------------------
+        retry = 4
+        data  = array.array('B', [])        # Empty Binary array
+        while retry and len(data) < 40:
+            time.sleep(0.1)                 # 2020-09-29 short delay @RogerPleijers
+            data = self.USB_Read()
+            retry -= 1
+
+        if len(data) < 40:
+            # 2020-09-29 the buffer is ignored when too short (was processed before)
+            logfile.Console('Tacx returns insufficient data, len=%s' % len(data))
+            if self.clv.PedalStrokeAnalysis:
+                logfile.Console('To resolve, try to run without Pedal Stroke Analysis.')
+            else:
+                logfile.Console('To resolve, check all cabling for loose contacts.')
+        else:
+            #-----------------------------------------------------------------------
+            # Define buffer format
+            #-----------------------------------------------------------------------
+            #nDeviceSerial      =  0                # 0...1
+            fDeviceSerial       = sc.unsigned_short
+            fFiller2_7          = sc.pad * ( 7 - 1) # 2...7
+            #nYearProduction    =  1                # 8
+            fYearProduction     = sc.unsigned_char
+            fFiller9_11         = sc.pad * (11 - 8) # 9...11
+            nHeartRate          =  2                # 12
+            fHeartRate          = sc.unsigned_char
+            nButtons            =  3                # 13
+            fButtons            = sc.unsigned_char
+            #nHeartDetect       =  4                # 14
+            fHeartDetect        = sc.unsigned_char
+            #nErrorCount        =  5                # 15
+            fErrorCount         = sc.unsigned_char
+            #nAxis0             =  6                # 16-17
+            fAxis0              = sc.unsigned_short
+            nAxis1              =  7                # 18-19
+            fAxis1              = sc.unsigned_short
+            #nAxis2             =  8                # 20-21
+            fAxis2              = sc.unsigned_short
+            #nAxis3             =  9                # 22-23
+            fAxis3              = sc.unsigned_short
+            #nHeader            = 10                # 24-27
+            fHeader             = sc.unsigned_int
+            #nDistance          = 11                # 28-31
+            fDistance           = sc.unsigned_int
+            nSpeed              = 12                # 32, 33            Wheel speed (Speed = WheelSpeed / SpeedScale in km/h)
+            fSpeed              = sc.unsigned_short
+            fFiller34_35        = sc.pad * 2        # 34...35           Increases if you accellerate?
+            fFiller36_37        = sc.pad * 2        # 36...37           Average power?
+            nCurrentResistance  = 13                # 38, 39
+            fCurrentResistance  = sc.short
+            nTargetResistance   = 14                # 40, 41
+            fTargetResistance   = sc.short
+            nEvents             = 15                # 42
+            fEvents             = sc.unsigned_char
+            fFiller43           = sc.pad            # 43
+            nCadence            = 16                # 44
+            fCadence            = sc.unsigned_char
+            fFiller45           = sc.pad            # 45
+            #nModeEcho          = 17                # 46
+            fModeEcho           = sc.unsigned_char
+            #nChecksumLSB       = 18                # 47
+            fChecksumLSB        = sc.unsigned_char
+            #nChecksumMSB       = 19                # 48
+            fChecksumMSB        = sc.unsigned_char
+            fFiller49_63        = sc.pad * (63 - 48)# 49...63
+
+            format = sc.no_alignment + fDeviceSerial + fFiller2_7 + fYearProduction + \
+                    fFiller9_11 + fHeartRate + fButtons + fHeartDetect + fErrorCount + \
+                    fAxis0 + fAxis1 + fAxis2 + fAxis3 + fHeader + fDistance + fSpeed + \
+                    fFiller34_35 + fFiller36_37 + fCurrentResistance + fTargetResistance + \
+                    fEvents + fFiller43 + fCadence + fFiller45 + fModeEcho + \
+                    fChecksumLSB + fChecksumMSB + fFiller49_63
+
+            #-----------------------------------------------------------------------
+            # Buffer must be 64 characters (struct.calcsize(format)),
+            # Note that tt_FortiusSB returns 48 bytes only; append with dummy
+            #-----------------------------------------------------------------------
+            for _v in range( 64 - len(data) ):
+                data.append(0)
+
+            #-----------------------------------------------------------------------
+            # Parse buffer
+            #-----------------------------------------------------------------------
+            tuple = struct.unpack (format, data)
+            self.Axis               = tuple[nAxis1]
+            self.Buttons            = tuple[nButtons]
+            self.Cadence            = tuple[nCadence]
+            self.CurrentResistance  = tuple[nCurrentResistance]
+            #
+            if debugSR: print('received: {}'.format(self.CurrentResistance))
+            # 
+            self.HeartRate          = tuple[nHeartRate]
+            self.PedalEcho          = tuple[nEvents]
+            self.TargetResistanceFT = tuple[nTargetResistance]
+            self.WheelSpeed         = tuple[nSpeed]
+
+            self.Wheel2Speed()
+            self.CurrentResistance2Power()
+
+            if debug.on(debug.Function):
+                logfile.Write ("ReceiveFromTrainer() = hr=%s Buttons=%s Cadence=%s Speed=%s TargetRes=%s CurrentRes=%s CurrentPower=%s, pe=%s %s" % \
+                            (  self.HeartRate, self.Buttons, self.Cadence, self.SpeedKmh, self.TargetResistance, self.CurrentResistance, self.CurrentPower, self.PedalEcho, self.Message) \
+                            )
+
 #-------------------------------------------------------------------------------
 # c l s T a c x N e w U s b T r a i n e r
 #-------------------------------------------------------------------------------
 # Tacx-trainer with New interface & USB connection
 #-------------------------------------------------------------------------------
 class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
+    _name = clsTacxLegacyUsbTrainer
+    
     def __init__(self, clv, Message, Headunit, UsbDevice):
         super().__init__(clv, Message)
-        if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer.__init__()")
+        if debug.on(debug.Function):logfile.Write ("{}.__init__()".format(self._name))
         self.SpeedScale = 301                        # TotalReverse: 289.75
         self.PowerResistanceFactor = 128866          # TotalReverse
 
@@ -1642,8 +2299,8 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         rtn = int(rtn)
 
         if debug.on(debug.Function):logfile.Write (\
-            "clsTacxNewUsbTrainer.TargetPower2Resistance(%s, %s) = %s" % \
-            (self.TargetPower, self.WheelSpeed, rtn ))
+            "%s.TargetPower2Resistance(%s, %s) = %s" % \
+            (self._name, self.TargetPower, self.WheelSpeed, rtn ))
         self.TargetResistance = rtn
 
     #---------------------------------------------------------------------------
@@ -1751,7 +2408,7 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
     #
     #---------------------------------------------------------------------------
     def _ReceiveFromTrainer(self):
-        if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer._ReceiveFromTrainer()")
+        if debug.on(debug.Function):logfile.Write ("{}._ReceiveFromTrainer()".format(self._name))
         #-----------------------------------------------------------------------
         # Read from trainer
         # 64 bytes are expected
