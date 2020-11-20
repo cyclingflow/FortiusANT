@@ -1,5 +1,5 @@
 #USER GRADE MODE: if true or not existent, use grade translation below, 
-#if false or not-existent
+#if false, use original mechanism of FortiusAnt (approaches reality of true resistance given slope, weight, etc)
 usergrademode = True 
 #Below you can customize grades and factors
 #GRADE  EXPLANATION:
