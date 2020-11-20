@@ -1,9 +1,7 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-18"
-# 2020-11-18    Same as 2020-09-30 In idle mode, modeCalibrate was used instead
-#                   of modeStop.
+__version__ = "2020-11-13"
 # 2020-11-13    QuarterSecond calculation improved
 # 2020-11-12    tcxExport class definitions changed
 # 2020-11-10    Calibration employs moving average as requested by #132
@@ -200,6 +198,14 @@ import usbTrainer
 PrintWarnings = False   # Print warnings even when logging = off
 CycleTimeFast = 0.02    # TRAINER- SHOULD WRITE THEN READ 70MS LATER REALLY
 CycleTimeANT  = 0.25
+#CF added constants
+MaxRollDownSpeed = 40.0  #We measure between maxRollDownSpeed-DipSpeedDif and minRollDownSpeed
+DipSpeedDif      = 0.0
+MinRollDownSpeed = 0.0
+RollDownTargetTime = 7.0
+PowerButtonStepSize = 10 #=1901 manual head unit stepsize
+
+
 # ------------------------------------------------------------------------------
 # Initialize globals
 # ------------------------------------------------------------------------------
@@ -233,7 +239,7 @@ def IdleFunction(self):
     global TacxTrainer
     rtn = 0
     if TacxTrainer and TacxTrainer.OK:
-        TacxTrainer.Refresh(True, usbTrainer.modeStop)
+        TacxTrainer.Refresh(True, usbTrainer.modeCalibrate)
         rtn = TacxTrainer.Buttons
     return rtn
 
@@ -309,11 +315,21 @@ def LocateHW(self):
 # ------------------------------------------------------------------------------
 def Runoff(self):
     global clv, AntDongle, TacxTrainer
+    if clv.Runoff:
+        MaxRollDownSpeed = clv.RunoffMaxSpeed
+        DipSpeedDif      = clv.RunoffDip
+        MinRollDownSpeed = clv.RunoffMinSpeed
+        RollDownTargetTime = clv.RunoffTime
+
     if clv.SimulateTrainer or clv.Tacx_iVortex:
         logfile.Console('Runoff not implemented for Simulated trainer or Tacx i-Vortex')
         return False
 
-    TacxTrainer.SetPower(100)
+    if TacxTrainer.has1901Brake():
+        TacxTrainer.SetGrade(-20)
+    else:
+        TacxTrainer.SetPower(100)        
+    
     rolldown        = False
     rolldown_time   = 0
 
@@ -340,7 +356,8 @@ def Runoff(self):
             logfile.Console("Runoff; Pedal Stroke Analysis active")
     else:
         CycleTime = CycleTimeANT    # 0.25 Seconds, inspired by 4Hz ANT+
-
+        
+    rolldown_time == 0
     while self.RunningSwitch == True:
         StartTime     = time.time()
         #-----------------------------------------------------------------------
@@ -355,34 +372,37 @@ def Runoff(self):
             self.SetValues(0, 0, 0, 0, 0, 0, 0, 0, 0)
             self.SetMessages(Tacx="Check if trainer is powered on")
         else:
+            ShortMessage = "Tacx Trainer"
             self.SetValues( TacxTrainer.SpeedKmh,         TacxTrainer.Cadence, \
                             TacxTrainer.CurrentPower,     TacxTrainer.TargetMode, \
                             TacxTrainer.TargetPower,      TacxTrainer.TargetGrade, \
                             TacxTrainer.TargetResistance, TacxTrainer.HeartRate, \
                             0)
-            if not rolldown or rolldown_time == 0:
-                self.SetMessages(Tacx=TacxTrainer.Message + " - Cycle to above 40kph (then stop)")
-            else:
-                self.SetMessages(Tacx=TacxTrainer.Message + \
-                                    " - Rolldown timer %s - STOP pedaling!" % \
+            if not rolldown:
+                self.SetMessages(Tacx=ShortMessage + " - Cycle to above {}kph (currently {})" \
+                                 .format(MaxRollDownSpeed, round(TacxTrainer.SpeedKmh, 1)))
+          
+            #---------------------------------------------------------------------
+            # SpeedKmh up to 40 km/h and then let wheel rolldown
+            #---------------------------------------------------------------------
+            if TacxTrainer.SpeedKmh > MaxRollDownSpeed:      # SpeedKmh above 40, start rolldown
+                self.SetMessages(Tacx=ShortMessage + " - STOP PEDALLING")                
+                rolldown = True
+        
+            if rolldown and TacxTrainer.SpeedKmh <=MaxRollDownSpeed-DipSpeedDif:
+                # rolldown timer starts when dips below 38
+                if rolldown_time == 0:
+                    rolldown_time = time.time()
+                self.SetMessages(Tacx=ShortMessage + \
+                                    " - KEEP STILL, Rolldown timer %s - " % \
                                     ( round((time.time() - rolldown_time),1) ) \
                                 )
           
-            #---------------------------------------------------------------------
-            # SpeedKmh up to 40 km/h and then rolldown
-            #---------------------------------------------------------------------
-            if TacxTrainer.SpeedKmh > 40:      # SpeedKmh above 40, start rolldown
-                rolldown = True
-        
-            if rolldown and TacxTrainer.SpeedKmh <=40 and rolldown_time == 0:
-                # rolldown timer starts when dips below 40
-                rolldown_time = time.time()
-          
-            if rolldown and TacxTrainer.SpeedKmh < 0.1 :    # wheel stopped
+            if rolldown and TacxTrainer.SpeedKmh < MinRollDownSpeed :    # wheel almost stopped
                 self.RunningSwitch = False                  # break loop
-                self.SetMessages(Tacx=TacxTrainer.Message + \
-                                    " - Rolldown time = %s seconds (aim 7s)" % \
-                                    round((time.time() - rolldown_time),1) \
+                self.SetMessages(Tacx=ShortMessage + \
+                                    " - Rolldown time = %s seconds (aim %3.1fs)" % \
+                                    (round((time.time() - rolldown_time),1), RollDownTargetTime) \
                                 )
 
         #-------------------------------------------------------------------------
@@ -426,8 +446,8 @@ def Runoff(self):
         # Respond to button press
         #-----------------------------------------------------------------------
         if   TacxTrainer.Buttons == usbTrainer.EnterButton:     pass
-        elif TacxTrainer.Buttons == usbTrainer.DownButton:      TacxTrainer.AddPower (-50) # Subtract 50 Watts for calibration test
-        elif TacxTrainer.Buttons == usbTrainer.UpButton:        TacxTrainer.AddPower ( 50) # Add 50 Watts for calibration test
+        elif TacxTrainer.Buttons == usbTrainer.DownButton:      TacxTrainer.AddPower (-PowerButtonStepSize) # Subtract 50 Watts for calibration test
+        elif TacxTrainer.Buttons == usbTrainer.UpButton:        TacxTrainer.AddPower ( PowerButtonStepSize) # Add 50 Watts for calibration test
         elif TacxTrainer.Buttons == usbTrainer.CancelButton:    self.RunningSwitch = False # Stop calibration
         else:                                                   pass
 
@@ -819,9 +839,9 @@ def Tacx2DongleSub(self, Restart):
             #-------------------------------------------------------------------
             if clv.manual:
                 if   TacxTrainer.Buttons == usbTrainer.EnterButton:     pass
-                elif TacxTrainer.Buttons == usbTrainer.DownButton:      TacxTrainer.AddPower(-50)
+                elif TacxTrainer.Buttons == usbTrainer.DownButton:      TacxTrainer.AddPower(-PowerButtonStepSize)
                 elif TacxTrainer.Buttons == usbTrainer.OKButton:        TacxTrainer.SetPower(100)
-                elif TacxTrainer.Buttons == usbTrainer.UpButton:        TacxTrainer.AddPower( 50)
+                elif TacxTrainer.Buttons == usbTrainer.UpButton:        TacxTrainer.AddPower( PowerButtonStepSize)
                 elif TacxTrainer.Buttons == usbTrainer.CancelButton:    self.RunningSwitch = False
                 else:                                                   pass
             elif clv.manualGrade:

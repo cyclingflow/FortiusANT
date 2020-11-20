@@ -112,7 +112,10 @@ class frmFortiusAntGui(wx.Frame):
             dirname = os.path.dirname(__file__)
 
         FortiusAnt_ico = os.path.join(dirname, "FortiusAnt.ico")
-        FortiusAnt_jpg = os.path.join(dirname, "FortiusAnt.jpg")
+        if self.clv.Tack_1901Brake:
+            FortiusAnt_jpg = os.path.join(dirname, "iMagic.jpg")
+        else:
+            FortiusAnt_jpg = os.path.join(dirname, "FortiusAnt.jpg")
         Heart_jpg      = os.path.join(dirname, "Heart.jpg"     )
 
         try:

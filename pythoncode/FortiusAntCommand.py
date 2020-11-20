@@ -25,6 +25,7 @@ import time
 
 import debug
 import logfile
+from ast import literal_eval as eval
 
 #-------------------------------------------------------------------------------
 # Realize clv to be program-global, by accessing through this function.
@@ -57,6 +58,13 @@ class CommandLineVariables(object):
     SimulateTrainer = False
     TacxType        = False
     Tacx_iVortex    = False
+    Tack_1901Brake  = False
+    Runoff          = False    
+    RunoffMaxSpeed  = False
+    RunoffDip       = False
+    RunoffMinSpeed  = False
+    RunoffTime      = False
+    
 
     uphill          = False      # introduced 2020-10-09; Negative grade is ignored
 
@@ -103,6 +111,7 @@ class CommandLineVariables(object):
                                                                                                             required=False, default=False)
         parser.add_argument('-P','--PowerMode', help='Power mode has preference over Resistance mode (for 30 seconds)',
                                                                                                             required=False, action='store_true')
+        parser.add_argument('-r','--Runoff',    help='(max_speed, dip, min_speed, target_time)',            required=False, default=False)        
         parser.add_argument('-s','--simulate',  help='Simulated trainer to test ANT+ connectivity',         required=False, action='store_true')
 #scs    parser.add_argument('-S','--scs',       help='Pair this Speed Cadence Sensor (0: default device)',  required=False, default=False)
         parser.add_argument('-t','--TacxType',  help='Specify Tacx Type; e.g. i-Vortex, default=autodetect',required=False, default=False)
@@ -273,12 +282,27 @@ class CommandLineVariables(object):
         #             logfile.Console('Command line error; -r incorrect low resistance=%s' % s[1])
 
         #-----------------------------------------------------------------------
+        # Get RunOffParams
+        #-----------------------------------------------------------------------
+        if args.Runoff:
+            try:
+                self.Runoff = eval(args.Runoff)
+                self.RunoffMaxSpeed = float(self.Runoff[0])
+                self.RunoffDip = float(self.Runoff[1])
+                self.RunoffMinSpeed = float(self.Runoff[2])
+                self.RunoffTime = float(self.Runoff[3])                
+            except:
+                logfile.Console('Command line error; -r incorrect %s' % args.Runoff)                
+
+        #-----------------------------------------------------------------------
         # Get TacxType
         #-----------------------------------------------------------------------
         if args.TacxType:
             self.TacxType = args.TacxType
             if self.TacxType in ('i-Vortex'):
                 self.Tacx_iVortex = True
+            elif self.TacxType in ('1901'):
+                self.Tack_1901Brake = True
             else:
                 logfile.Console('Command line error; -t incorrect value=%s' % args.TacxType)
                 args.TacxType = False
@@ -337,6 +361,7 @@ class CommandLineVariables(object):
             if      not self.args.calibrate: logfile.Console("-n")
             if v or self.args.factor:        logfile.Console("-p %s" % self.PowerFactor )
             if      self.args.PowerMode:     logfile.Console("-P")
+            if      self.args.Runoff:        logfile.Console("-r")
             if      self.args.simulate:      logfile.Console("-s")
 #scs        if      self.args.scs:           logfile.Console("-S %s" % self.scs )
             if      self.args.TacxType:      logfile.Console("-t %s" % self.TacxType)
