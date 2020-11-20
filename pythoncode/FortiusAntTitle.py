@@ -1,8 +1,7 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v3.7"                # Double quotes, see below!
-# 2020-11-18    Version 3.7
+WindowTitle = "Fortius Antifier v3.6 1901 Brake Test"                # Double quotes, see below!
 # 2020-11-12    Version 3.6
 # 2020-11-05    Version 3.5
 # 2020-11-04    First version
