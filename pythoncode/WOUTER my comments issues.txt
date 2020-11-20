@@ -1,0 +1,20 @@
+=>Possible Bug:
+usbTrainer around line 156
+"imagic_fw  = os.path.join(dirname, 'tacximagic_1902_firmware.hex')"
+The use of dirname.
+
+I used the same mechanism for power factros file,
+but it turns out the .exe file can not find it.
+Doe this apply to your hex files as well?
+
+
+=>Suggestion other copy running?
+Would it not be nice to have FortiusAnt test
+for another copy already running?
+It now hangs with a lot of error message because
+the ant/usb interface is not available.
+
+
+
+
+
