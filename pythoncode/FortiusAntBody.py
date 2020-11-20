@@ -1,7 +1,7 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-13"
+__version__ = "2020-11-19"
 # 2020-11-13    QuarterSecond calculation improved
 # 2020-11-12    tcxExport class definitions changed
 # 2020-11-10    Calibration employs moving average as requested by #132

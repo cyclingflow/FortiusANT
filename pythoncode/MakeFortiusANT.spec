@@ -16,6 +16,7 @@ a = Analysis(['FortiusANT.py'],
              datas=[
                 ( './FortiusAnt.ico',                '.' ),
                 ( './FortiusAnt.jpg',                '.' ),
+                ( './iMagic.jpg',                    '.' ),
                 ( './Heart.jpg',                     '.' ),
                 ( './tacxfortius_1942_firmware.hex', '.' ),
                 ( './tacximagic_1902_firmware.hex',  '.' )

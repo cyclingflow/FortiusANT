@@ -1,7 +1,7 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-04"
+__version__ = "2020-11-19"
 # 2020-11-04    WindowTitle separated into FortiusAntTitle.py
 # 2020-10-01    Version 3.2.2:
 #               - Enable manual mode withoout ANT dongle
