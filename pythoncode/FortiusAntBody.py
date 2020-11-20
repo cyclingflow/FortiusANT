@@ -204,7 +204,9 @@ DipSpeedDif      = 0.0
 MinRollDownSpeed = 0.0
 RollDownTargetTime = 7.0
 PowerButtonStepSize = 10 #=1901 manual head unit stepsize
-
+DefaultPowerButtonStepSize = 50
+T1901PowerButtonStepSize = 10
+PowerButtonStepSize = DefaultPowerButtonStepSize
 
 # ------------------------------------------------------------------------------
 # Initialize globals
@@ -327,7 +329,9 @@ def Runoff(self):
 
     if TacxTrainer.has1901Brake():
         TacxTrainer.SetGrade(-20)
+        PowerButtonStepSize = T1901PowerButtonStepSize
     else:
+        PowerButtonStepSize = DefaultPowerButtonStepSize
         TacxTrainer.SetPower(100)        
     
     rolldown        = False
@@ -628,6 +632,10 @@ def Tacx2DongleSub(self, Restart):
     StartPedaling   = True
     Counter         = 0
 
+    #CF
+    PowerButtonStepSize = DefaultPowerButtonStepSize
+
+
     if TacxTrainer.CalibrateSupported():
         self.SetMessages(Tacx="* * * * S T A R T   P E D A L L I N G * * * *")
         if debug.on(debug.Function):
@@ -759,6 +767,11 @@ def Tacx2DongleSub(self, Restart):
     # -- Pedal stroke analysis
     # -- Modify data, due to Buttons or ANT
     #---------------------------------------------------------------------------
+    if TacxTrainer.has1901Brake():
+        PowerButtonStepSize = T1901PowerButtonStepSize
+    else:
+        PowerButtonStepSize = DefaultPowerButtonStepSize
+    
     if debug.on(debug.Function): logfile.Write('Tacx2Dongle; start main loop')
     try:
         while self.RunningSwitch == True and not AntDongle.DongleReconnected:

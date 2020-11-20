@@ -55,6 +55,8 @@ import threading
 import time
 import wx
 import wx.lib.agw.speedmeter as SM
+#CF prevent display sleep
+#import ctypes
 
 import debug
 import logfile
@@ -990,6 +992,9 @@ class frmFortiusAntGui(wx.Frame):
     def OnClick_btnRunoff(self, event):
         if __name__ == "__main__":  print ("OnClick_btnRunoff()")
 
+        #CF reinstate display sleeping
+        #ctypes.windll.kernel32.SetThreadExecutionState(0x80000000)
+
         self.btnStop.Enable()
         self.btnStart.Disable()
         self.btnRunoff.Disable()
@@ -1029,6 +1034,8 @@ class frmFortiusAntGui(wx.Frame):
     def OnClick_btnStart(self, event=False):
         if __name__ == "__main__": print ("OnClick_btnStart()")
 
+        #CF prevent display sleep
+        #ctypes.windll.kernel32.SetThreadExecutionState(0x80000002)
         self.btnStop.Enable()
         self.btnStart.Disable()
         self.btnRunoff.Disable()
@@ -1039,6 +1046,9 @@ class frmFortiusAntGui(wx.Frame):
 
     def OnClick_btnStart_Thread(self):
         if __name__ == "__main__": print ("OnClick_btnStart_Thread()")
+
+        #CF prevent display sleep
+        #ctypes.windll.kernel32.SetThreadExecutionState(0x80000002)
 
         self.RunningSwitch = True               # callTacx2Dongle() will loop
         self.CloseButtonPressed = False
@@ -1066,6 +1076,9 @@ class frmFortiusAntGui(wx.Frame):
     # --------------------------------------------------------------------------
     def OnClick_btnStop(self, event=False):
         if __name__ == "__main__": print ("OnClick_btnStop()")
+        #CF reinstate display sleeping
+        #ctypes.windll.kernel32.SetThreadExecutionState(0x80000000)
+        
         self.RunningSwitch = False
         self.ResetValues()
         self.btnRunoff.Enable()
@@ -1087,6 +1100,9 @@ class frmFortiusAntGui(wx.Frame):
     # --------------------------------------------------------------------------
     def OnClose(self, event):
         if __name__ == "__main__": print("OnClose()")
+
+        #CF reinstate display sleeping
+        #ctypes.windll.kernel32.SetThreadExecutionState(0x80000000)
 
         if self.RunningSwitch == True:          # Thread is running
             self.RunningSwitch = False          # Stop the thread
