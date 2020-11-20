@@ -1,0 +1,10 @@
+The binary I built exceeded Githubs limits.
+
+The support files will be updated here.
+However, for the executable you will need to go to
+the release.
+
+Go to main page of my repository,
+on the right side, you should see releases,
+click on it, you will find the lastest release and can download it.
+Unpack everything to folder of choice.
