@@ -1,8 +1,7 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-18"
-# 2020-11-18    Logfile shows what version is started; windows exe or python
+__version__ = "2020-11-13"
 # 2020-11-13    Logfile was not closed on end
 # 2020-11-05    New files added, githubWindowTitle() used
 # 2020-05-24    WindowTitle in logfile
@@ -168,7 +167,8 @@ class clsFortiusAntConsole:
             self.RunningSwitch = True
             Tacx2Dongle(self)
 
-    def SetValues(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate, iTeeth):
+    #CF
+    def SetValues(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate, iTeeth, extra=None):
         # ----------------------------------------------------------------------
         # Console: Update current readings, once per second
         # ----------------------------------------------------------------------
@@ -257,7 +257,8 @@ class frmFortiusAntChild(gui.frmFortiusAntGui):
             elif cmd == cmd_StopButton:
                 pass
             elif cmd == cmd_SetValues:
-                self.SetValues(rtn[0], rtn[1], rtn[2], rtn[3], rtn[4], rtn[5], rtn[6], rtn[7], rtn[8])# rtn is tuple
+                #CF extra
+                self.SetValues(rtn[0], rtn[1], rtn[2], rtn[3], rtn[4], rtn[5], rtn[6], rtn[7], rtn[8],rtn[9])# rtn is tuple
             elif cmd == cmd_SetMessages:
                 self.SetMessages(rtn[0], rtn[1], rtn[2])# rtn is (Tacx, Dongle, HRM) tuple
             elif cmd == cmd_PedalStrokeAnalysis:
@@ -349,13 +350,14 @@ class clsFortiusAntParent:
             logfile.Write ("mp-MainRespondToGUI(%s, %s)" % (command, rtn))
         self.app_conn.send((command, rtn))      # Step 3. Main sends the response to GUI
 
-    def SetValues(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate, iTeeth):
+    #CF extra
+    def SetValues(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate, iTeeth, extra=None):
         delta = time.time() - self.LastTime     # Delta time since previous call
         if delta >= 1:                          # Do not send faster than once per second
-            self.LastTime = time.time()         # Time in seconds
+            #self.LastTime = time.time()         # Time in seconds
             if debug.on(debug.MultiProcessing): logfile.Write ("mp-MainDataToGUI(%s, (%s, %s, %s, %s, %s, %s, %s, %s, %s))" % \
                     (cmd_SetValues, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate, iTeeth))
-            self.app_conn.send((cmd_SetValues, (fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate, iTeeth)))
+            self.app_conn.send((cmd_SetValues, (fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate, iTeeth, extra)))
 
     def SetMessages(self, Tacx=None, Dongle=None, HRM=None):
         newMessages = (Tacx, Dongle, HRM)
@@ -483,12 +485,6 @@ if __name__ == "__main__":
     # Component info
     #-------------------------------------------------------------------------------
     if debug.on(debug.Any):
-        # ----------------------------------------------------------------------
-        if getattr(sys, 'frozen', False):
-            logfile.Write('Windows executable started')
-        else:
-            logfile.Write('Python version started')
-        # ----------------------------------------------------------------------
         logfile.Write('Version info for the components' )
         logfile.Write(githubWindowTitle())
         s = " %20s = %s"

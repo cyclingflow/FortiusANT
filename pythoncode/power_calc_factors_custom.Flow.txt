@@ -1,6 +1,20 @@
+#USER GRADE MODE: if true or not existent, use grade translation below, 
+#if false, use original mechanism of FortiusAnt (approaches reality of true resistance given slope, weight, etc)
 usergrademode = True
-#grade:multiplier,additional
--3.7: 5.3065,	 -29.3480 #res level 0
+interceptCorrection = 0
+slopeCorrection = 0.0
+#Below you can customize grades and factors
+#GRADE  EXPLANATION:
+# each grades defines the grade slope at which a certain resitance level starts to operate
+# example: if the VR trainer software (Zwift, Rouvy, etc) requests a slope/Grade of G
+# then the highest level at which G>=user_grade is selected
+# example
+# 0.5:  8.45,	 -59.1000 #res level 5
+# 1.4:  9.3906,	 -65.5000 #res level 6
+# user grade = 0.5 => as soon as the trainer request a slope equal or higher than 0.5 this level (5) is selected,
+# however, if the grade/slope equals or exceeds the next user grade 1.4, the next level is selected (6)
+# grade: slope, intercept (multiplier, additional factor added)
+-3.7: 4.9505,	 -22.1594 #res level 0
 -3.4: 5.6008,	 -33.1000 #res level 1
 -2.5: 5.9874,	 -37.0000 #res level 2
 -1.9: 6.6848,	 -43.8130 #res level 3

@@ -59,6 +59,7 @@ class CommandLineVariables(object):
     TacxType        = False
     Tacx_iVortex    = False
     Tack_1901Brake  = False
+    Tack_1901BrakeB  = False
     Runoff          = False    
     RunoffMaxSpeed  = False
     RunoffDip       = False
@@ -303,6 +304,8 @@ class CommandLineVariables(object):
                 self.Tacx_iVortex = True
             elif self.TacxType in ('1901'):
                 self.Tack_1901Brake = True
+            elif self.TacxType in ('1901B'):
+                self.Tack_1901BrakeB = True
             else:
                 logfile.Console('Command line error; -t incorrect value=%s' % args.TacxType)
                 args.TacxType = False

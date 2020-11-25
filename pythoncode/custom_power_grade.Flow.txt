@@ -1,0 +1,24 @@
+#CUSTOM POWER FACTORS 
+#customSlopeFactor = [0.00622416172916, -7.88257894375740]
+#customInterceptFactor = [-0.04253289148226, 68.48478960079657]
+#simultane
+customSlopeFactor = [0.00562934278084,   -6.34867715283710]
+customInterceptFactor = [-0.03352338540939, 45.57252453300008 ]
+
+
+#GRADE  EXPLANATION:
+# each grades defines the grade slope at which a certain resitance level starts to operate
+# example: if the VR trainer software (Zwift, Rouvy, etc) requests a slope/Grade of G
+# then the highest level at which G>=user_grade is selected
+# example
+# [ ..., 0.5, 1.4, ...]
+# user grade = 0.5 => as soon as the trainer request a slope equal or higher than 0.5 this level (5 = position 5 in array) is selected,
+# however, if the grade/slope equals or exceeds the next user grade 1.4, the next level is selected (6 = position 6 in array)
+customGrades = [-4.3, -3.4, -2.5, -1.6, -0.7, 0.5, 1.4, 2.9, 4.0, 5.6, 7.4, 8.6, 9.8, 11.0]
+#USER GRADE MODE: if true or not existent, use grade translation above, you can switch it off here 
+userGradeMode = True 
+#Options
+#no userGradeMode, no customGrades => userGradeMode = off
+#no userGradeMode, customGrades defined => userGradeMode = on
+#userGradeMode = true, no customGrades defined => userGradeMode = on with default grades
+#userGradeMode = false, no customGrades defined => userGradeMode = off, grades ignored

@@ -316,7 +316,7 @@ def LocateHW(self):
 # Returns:      True
 # ------------------------------------------------------------------------------
 def Runoff(self):
-    global clv, AntDongle, TacxTrainer
+    global clv, AntDongle, TacxTrainer, MaxRollDownSpeed, DipSpeedDif, MinRollDownSpeed, RollDownTargetTime
     if clv.Runoff:
         MaxRollDownSpeed = clv.RunoffMaxSpeed
         DipSpeedDif      = clv.RunoffDip
@@ -377,10 +377,10 @@ def Runoff(self):
             self.SetMessages(Tacx="Check if trainer is powered on")
         else:
             ShortMessage = "Tacx Trainer"
-            self.SetValues( TacxTrainer.SpeedKmh,         TacxTrainer.Cadence, \
-                            TacxTrainer.CurrentPower,     TacxTrainer.TargetMode, \
-                            TacxTrainer.TargetPower,      TacxTrainer.TargetGrade, \
-                            TacxTrainer.TargetResistance, TacxTrainer.HeartRate, \
+            self.SetValues( TacxTrainer.SpeedKmh,         TacxTrainer.Cadence,
+                            TacxTrainer.CurrentPower,     TacxTrainer.TargetMode,
+                            TacxTrainer.TargetPower,      TacxTrainer.TargetGrade,
+                            TacxTrainer.TargetResistance, TacxTrainer.HeartRate,
                             0)
             if not rolldown:
                 self.SetMessages(Tacx=ShortMessage + " - Cycle to above {}kph (currently {})" \
@@ -681,6 +681,7 @@ def Tacx2DongleSub(self, Restart):
                         logfile.Write('Tacx2Dongle; start calibration')
                     StartPedaling = False
 
+
                 self.SetValues(TacxTrainer.SpeedKmh, int(CountDown/4), \
                         round(TacxTrainer.CurrentPower * -1,0), \
                         mode_Power, 0, 0, TacxTrainer.CurrentResistance * -1, 0, 0)
@@ -810,6 +811,9 @@ def Tacx2DongleSub(self, Restart):
             #-------------------------------------------------------------------
             # Show actual status
             #-------------------------------------------------------------------
+
+            #CF extra
+
             self.SetValues(TacxTrainer.VirtualSpeedKmh, 
                             TacxTrainer.Cadence, \
                             TacxTrainer.CurrentPower, \
@@ -818,9 +822,16 @@ def Tacx2DongleSub(self, Restart):
                             TacxTrainer.TargetGrade, \
                             TacxTrainer.TargetResistance, \
                             HeartRate, \
-                            TacxTrainer.Teeth)
+                            TacxTrainer.Teeth,
+                           (TacxTrainer.CurrentResistance,
+                            TacxTrainer.TargetResistance,
+                            TacxTrainer.CalibrateSend,
+                            0,
+                            TacxTrainer.Accell,
+                            TacxTrainer.AvePower))
 
-            #-------------------------------------------------------------------
+
+#-------------------------------------------------------------------
             # Add trackpoint
             #-------------------------------------------------------------------
             if QuarterSecond and clv.exportTCX:
