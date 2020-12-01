@@ -1454,9 +1454,6 @@ class clsTacxUsbTrainer(clsTacxTrainer):
             logfile.Console(error)
         else:
             Target = int(Target)
-            #
-            if debugSR: print('send: {}'.format(Target))
-            # 
             data   = self.SendToTrainerUSBData(TacxMode, Calibrate, PedalEcho, Target, Weight)
 
             #-------------------------------------------------------------------
@@ -1673,13 +1670,11 @@ class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer):
 class clsTacx1901UsbTrainer(clsTacxUsbTrainer):
     _name = 'clsTacxUsb1901Trainer'
     level4res = {0: 0, 1039: 0, 1299: 1, 1559: 2, 1819: 3, 2078: 4, 2338: 5, 2598: 6, 2858: 7, 3118: 8, 3378: 9, 3767: 10, 4027: 11, 4287: 12, 4677: 13}
-    receivedResValues = level4res.keys()    
+    receivedResValues = list(level4res.keys())
     sendResList=[1900, 2030, 2150, 2300, 2400, 2550, 2700, 2900, 3070, 3200, 3350, 3460, 3600, 3750] #possible resistance value to be transmitted to device
     #The follwing knots define the piecewise linear approach to powercalculation
     minimalPower = 0 #Wats
     userGradeMode = False  # providing a custom file sets this
-    slopeCorrection = 0.0
-    interceptCorrection = 0.0
 
     customFactors = False
     #-------------------------------------------------------------------------------
@@ -1690,30 +1685,34 @@ class clsTacx1901UsbTrainer(clsTacxUsbTrainer):
     # which certainly helps the consistency of target power control :-)
     #-------------------------------------------------------------------------------
     defaultPowerFactors4Level = {
-        0:  [ 4.9505,	-22.1594 ],
-        1:  [ 5.0220,	-21.6162 ],
-        2:  [ 5.5221,	-22.7920 ],
-        3:  [ 6.1768,	-25.8851 ],
-        4:  [ 6.9212,	-29.6913 ],
-        5:  [ 7.4888,	-35.5619 ],
-        6:  [ 8.5393,	-37.4877 ],
-        7:  [ 9.8642,	-54.9276 ],
-        8:  [10.2842,	-61.0939 ],
-        9:  [12.2175,	-75.5787 ],
-        10: [12.8503,	-71.6342 ],
-        11: [13.5467,	-72.8231 ],
-        12: [14.2550,	-68.7817 ],
-        13: [14.0235,	-62.0916 ]}
+        0:  [ 4.9505,	 -22.1594 ],
+        1:  [ 5.0220,	 -21.6162 ],
+        2:  [ 5.5221,	 -22.7920 ],
+        3:  [ 6.1768,	 -25.8851 ],
+        4:  [ 6.9212,	 -29.6913 ],
+        5:  [ 7.4888,	 -35.5619 ],
+        6:  [ 8.5393,	 -37.4877 ],
+        7:  [ 9.8642,	 -54.9276 ],
+        8:  [10.2842,	 -61.0939 ],
+        9:  [12.2175,	 -75.5787 ],
+        10: [13.1212,	 -76.0508 ],
+        11: [13.5467,	 -72.8231 ],
+        12: [15.7372,	 -93.5248 ],
+        13: [16.7176,	-110.8583 ]}
     defaultGrade4Level = [-4.3, -3.4, -2.5, -1.6, -0.7, 0.5, 1.4, 2.9, 4.0, 5.6, 7.4, 8.6, 9.8, 11.0]
     defaultSpeedAtKnot = 10
 
     def __init__(self, clv, Message, Headunit, UsbDevice):
         super().__init__(clv, Message)
         if debug.on(debug.Function):logfile.Write ("{}.__init__()".format(self._name))
-        #ORI self.SpeedScale = 301                        # TotalReverse: 289.75
-        self.SpeedScale = 280.54  #factor used in antifier, so we can use antifier power_curve calibration factors
-        #ORI self.PowerResistanceFactor = 128866
-        self.PowerResistanceFactor = 138866 # now used
+        #Original SpeedScale = 301 # TotalReverse: 289.75 #Antifier  #280.54
+        self.SpeedScale = 280.54
+        #self.SpeedScale = 279
+        self.calCorrection = 1.07
+        #self.calCorrection = 1.0
+        #self.SpeedScale = 289.75
+        #Original self.PowerResistanceFactor = 128866
+        #no use self.PowerResistanceFactor = 129129 #=mean actual range is from 150500 to 97727
 
         #Get the powercalc and grade factors
         self.powerFactors4Level = None
@@ -1730,7 +1729,7 @@ class clsTacx1901UsbTrainer(clsTacxUsbTrainer):
         #check knot positions, power seqence should be monotonically increasing
         #for resistanceLevel in range(0,14):
         #    print(resistanceLevel, self._calcPowerAboveKnot(resistanceLevel, self.speedAtKnot))
-        #    #print(resistanceLevel, self._calcPowerAboveKnot(resistanceLevel, 12))
+        #    print(resistanceLevel, self._calcPowerAboveKnot(resistanceLevel, 20))
 
         self.Message = "Tacx"+self.Message[25:]
         if (self.customFactors):
@@ -1741,14 +1740,13 @@ class clsTacx1901UsbTrainer(clsTacxUsbTrainer):
             self.Message += ", user grades"
         self.Message += ")"
 
-        #print(self._calcPower(0, 4.8))
-        #print(self._calcPowerAboveKnot(0, 4.8))
-
         self.Headunit   = Headunit
         self.UsbDevice  = UsbDevice
         self.OK         = True
 
         #Temporary tests
+        print("hier")
+
 
 
     def _parseParameterValue(self, line):
@@ -1781,32 +1779,6 @@ class clsTacx1901UsbTrainer(clsTacxUsbTrainer):
                 msg = 'Error parsing power factor file {}. Unknown value {}.'.format(filename, value)
                 logfile.Console(msg)
 
-        #Slope correction (for all slopes), supposed to be temporary feature
-        elif (parameter == 'slopecorrection'):
-            if (isinstance(value, float)):
-                #quick and dirty direct access
-                self.slopeCorrection = value
-            else:
-                if debug.on(debug.Function):logfile.Write ("{}._parseAntifierPowerCurveFactors():" \
-                                                           "error parsing power factor file {}: Unknown value {}.".format(self._name, filename, value))
-                msg = 'Error parsing power factor file {}. Unknown value {}.'.format(filename, value)
-                logfile.Console(msg)
-
-        #Intercept correction (for all intercepts), supposed to be temporary feature
-        elif (parameter == 'interceptcorrection'):
-            if (isinstance(value, float)):
-                #quick and dirty direct access
-                self.interceptCorrection = value
-            else:
-                if debug.on(debug.Function):logfile.Write ("{}._parseAntifierPowerCurveFactors():" \
-                                                           "error parsing power factor file {}: Unknown value {}.".format(self._name, filename, value))
-                msg = 'Error parsing power factor file {}. Unknown value {}.'.format(filename, value)
-                logfile.Console(msg)
-        else:
-            if debug.on(debug.Function):logfile.Write ("{}._parseAntifierPowerCurveFactors():" \
-                                                       "error parsing power factor file {}: Unknown parameter {}.".format(self._name, filename, parameter))
-            msg = 'Error parsing power factor file {}. Unknown parameter. {}'.format(filename, parameter)
-            logfile.Console(msg)
 
         return userGradeMode
 
@@ -1882,7 +1854,7 @@ class clsTacx1901UsbTrainer(clsTacxUsbTrainer):
     # a linear function for this brake (intercept needed), and we will add wheel mass acceleration factor later
     #---------------------------------------------------------------------------
     def _calcPowerAboveKnot(self, resistanceLevel, speedKmh):
-        return max(0.0, int((self.interceptCorrection + speedKmh*(self.powerFactors4Level[resistanceLevel][0]+self.slopeCorrection) + \
+        return self.calCorrection*max(0.0, int((speedKmh*(self.powerFactors4Level[resistanceLevel][0]) + \
                            self.powerFactors4Level[resistanceLevel][1])))
 
 
@@ -1920,25 +1892,6 @@ class clsTacx1901UsbTrainer(clsTacxUsbTrainer):
             resistanceLevel = 5
         self.CurrentPower = self._calcPower(resistanceLevel, self.SpeedKmh)
         #print('level: {}, speed: {}, power: {}, target resistance: {}, resistance: {}'.format(resistanceLevel, self.SpeedKmh, self.CurrentPower, self.TargetResistance, self.CurrentResistance))
-
-
-    # CF suggestion: this gives TARGET Resistance based upon TargetPower AND wheelspeed
-    # may be change into TargetPowerAndWheelSpeed2TargetResistance
-    # Moreover, it is always called, even in manual grade mode, THIS IS NOW CORRECTED
-    def TargetPower2ResistanceOri(self):
-        # original version
-        rtn        = 0
-        if self.WheelSpeed > 0:
-            rtn = self.TargetPower * self.PowerResistanceFactor / self.WheelSpeed
-            rtn = self.__AvoidCycleOfDeath(rtn)
-        rtn = int(rtn)
-
-        if debug.on(debug.Function):logfile.Write (\
-            "%s.TargetPower2Resistance(%s, %s) = %s" % \
-            (self._name, self.TargetPower, self.WheelSpeed, rtn ))
-
-        self.TargetResistance = rtn
-        #return rtn
 
 
     def TargetPower2Resistance(self):
@@ -2098,6 +2051,11 @@ class clsTacx1901UsbTrainer(clsTacxUsbTrainer):
             else:
                 self._Grade2Power()
                 self.TargetPower2Resistance()
+            #testcode
+            #self.rplus += 10
+            #if self.rplus>120: self.rplus = 10
+            #self.TargetResistance += self.rplus
+
                 
         #-----------------------------------------------------------------------
         # CF NO! at least not for this brake, at this position, moved to above
@@ -2166,6 +2124,8 @@ class clsTacx1901UsbTrainer(clsTacxUsbTrainer):
     def SendToTrainerUSBData(self, TacxMode, Calibrate, PedalEcho, Target, Weight):
         #CF
         #print("send calibrate {}".format(Calibrate))
+        #Calibrate = 3000
+        if debugSR: print("send: {}".format(Target))
         self.CalibrateSend = Calibrate
         #Do we need TacxMode, Calibrate, PedalEcho, Weight?
         Target = int(min(0x7fff, Target))
@@ -2347,8 +2307,8 @@ class clsTacx1901UsbTrainer(clsTacxUsbTrainer):
 
 class clsSimplifiedTacx1901UsbTrainer(clsTacx1901UsbTrainer):
     _name = 'clsSimplifiedTacxUsb1901Trainer'
-    defaultSlopeFactor = [0.00622416172916, -7.88257894375740]
-    defaultInterceptFactor = [-0.04253289148226, 68.48478960079657]
+    defaultSlopeFactor = [0.00448175378669, -2.38456777848987]
+    defaultInterceptFactor = [-0.00000856397364, 0.01920799469476, -38.72957422654344]
     slopeFactor = defaultSlopeFactor
     interceptFactor = defaultInterceptFactor
 
@@ -2380,24 +2340,38 @@ class clsSimplifiedTacx1901UsbTrainer(clsTacx1901UsbTrainer):
 
 
     def _calcPowerAboveKnot(self, resistanceLevel, speedKmh):
-        slope = self.sendResList[resistanceLevel] * self.slopeFactor[0] + self.slopeFactor[1]
-        intercept = self.sendResList[resistanceLevel] * self.interceptFactor[0] + self.interceptFactor[1]
-        return max(0.0, int(speedKmh*slope + intercept))
+        rL = self.sendResList[resistanceLevel] # or rL = resistanceLevel+1
+        slope = rL * self.slopeFactor[0] + self.slopeFactor[1]
+        intercept = rL**2 * self.interceptFactor[0] +\
+                    rL * self.interceptFactor[1] + self.interceptFactor[2]
+        #print(resistanceLevel, self.sendResList[resistanceLevel], slope, intercept)
+        return self.calCorrection*max(0.0, int(speedKmh*slope + intercept))
 
 
     def _calcPower(self, resistanceLevel, speedKmh):
         #print("resistance {}, speed {}".format(resistanceLevel, speedKmh))
         zeroSpeedThreshold = 0.1
+        #new reguralized
+        if speedKmh<zeroSpeedThreshold:
+            currentPowerR = 0
+        else:
+            if speedKmh<self.speedAtKnot: # use linear interpolation between (0.1, minimalPower) and (powerCalcKnots[resistanceLevel], powerAtKnot)
+                powerAtKnotR = self._calcPowerAboveKnot(resistanceLevel, self.speedAtKnot)
+                currentPowerR = self.minimalPower + (powerAtKnotR - self.minimalPower)*(speedKmh - zeroSpeedThreshold)/(self.speedAtKnot - zeroSpeedThreshold)
+            else: #use linear approximation
+                currentPowerR = self._calcPowerAboveKnot(resistanceLevel, speedKmh)
+
+        #old
         if speedKmh<zeroSpeedThreshold:
             currentPower = 0
         else:
             if speedKmh<self.speedAtKnot: # use linear interpolation between (0.1, minimalPower) and (powerCalcKnots[resistanceLevel], powerAtKnot)
-                powerAtKnot = self._calcPowerAboveKnot(resistanceLevel, self.speedAtKnot)
-                #print("power at knot: {}, for knot speed {}".format(powerAtKnot, self.powerCalcKnot))
+                powerAtKnot = super()._calcPowerAboveKnot(resistanceLevel, self.speedAtKnot)
                 currentPower = self.minimalPower + (powerAtKnot - self.minimalPower)*(speedKmh - zeroSpeedThreshold)/(self.speedAtKnot - zeroSpeedThreshold)
-
             else: #use linear approximation
-                currentPower = self._calcPowerAboveKnot(resistanceLevel, speedKmh)
+                currentPower = super()._calcPowerAboveKnot(resistanceLevel, speedKmh)
+        #we want to compare both
+        self.CurrentPowerR = currentPowerR
         return currentPower
 
 
@@ -2446,7 +2420,7 @@ class clsSimplifiedTacx1901UsbTrainer(clsTacx1901UsbTrainer):
                 msg = 'Error parsing power factor file {}. Unknown value {} for customSlopefactor.'.format(filename, value)
                 logfile.Console(msg)
 
-        #Intercept factor = [a, b]
+        #Intercept factor = [c, a, b]
         elif (parameter == 'custominterceptfactor'):
             exception = False
             try:
@@ -2454,7 +2428,7 @@ class clsSimplifiedTacx1901UsbTrainer(clsTacx1901UsbTrainer):
             except:
                 exception = True
                 customInterceptFactor = None
-            if exception or len(customInterceptFactor)!= 2 or not isinstance(customInterceptFactor[0], float):
+            if exception or len(customInterceptFactor)!= 3 or not isinstance(customInterceptFactor[0], float):
                 if debug.on(debug.Function):logfile.Write ("{}._parseAntifierPowerCurveFactors():" \
                                                            "error parsing power factor file {}: Unknown value {}.".format(self._name, filename, value))
                 msg = 'Error parsing power factor file {}. Unknown value {} for customInterceptValue.'.format(filename, value)

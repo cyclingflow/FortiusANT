@@ -813,8 +813,11 @@ def Tacx2DongleSub(self, Restart):
             #-------------------------------------------------------------------
 
             #CF extra
-
-            self.SetValues(TacxTrainer.VirtualSpeedKmh, 
+            if hasattr(TacxTrainer, 'CurrentPowerR'):
+                PF =  TacxTrainer.CurrentPowerR
+            else:
+                PF=0
+            self.SetValues(TacxTrainer.VirtualSpeedKmh,
                             TacxTrainer.Cadence, \
                             TacxTrainer.CurrentPower, \
                             TacxTrainer.TargetMode, \
@@ -826,8 +829,8 @@ def Tacx2DongleSub(self, Restart):
                            (TacxTrainer.CurrentResistance,
                             TacxTrainer.TargetResistance,
                             TacxTrainer.CalibrateSend,
-                            0,
-                            TacxTrainer.Accell,
+                            PF,
+                            TacxTrainer.Cadence,
                             TacxTrainer.AvePower))
 
 

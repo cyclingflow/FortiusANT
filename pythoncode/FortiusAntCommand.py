@@ -65,7 +65,7 @@ class CommandLineVariables(object):
     RunoffDip       = False
     RunoffMinSpeed  = False
     RunoffTime      = False
-    
+    ExtraFieldsCF   = False
 
     uphill          = False      # introduced 2020-10-09; Negative grade is ignored
 
@@ -102,6 +102,7 @@ class CommandLineVariables(object):
         parser = argparse.ArgumentParser(description='Program to broadcast data from USB Tacx Fortius trainer, and to receive resistance data for the trainer')
         parser.add_argument('-a','--autostart', help='Automatically start',                                 required=False, action='store_true')
         parser.add_argument('-A','--PedalStrokeAnalysis', help='Pedal Stroke Analysis',                     required=False, action='store_true')
+        parser.add_argument('-c','--cfx',       help='Show info for debugging',                             required=False, action='store_true')
         parser.add_argument('-d','--debug',     help='Show debugging data',                                 required=False, default=False)
         parser.add_argument('-g','--gui',       help='Run with graphical user interface',                   required=False, action='store_true')
         parser.add_argument('-H','--hrm',       help='Pair this Heart Rate Monitor (0: any, -1: none)',     required=False, default=False)
@@ -146,6 +147,8 @@ class CommandLineVariables(object):
         self.SimulateTrainer        = args.simulate
         self.uphill                 = args.uphill
         self.exportTCX              = args.exportTCX
+        self.ExtraFieldsCF          = args.cfx
+
 
         if self.manual and self.manualGrade:
             logfile.Console("-m and -M are mutually exclusive; manual power selected")
@@ -293,7 +296,10 @@ class CommandLineVariables(object):
                 self.RunoffMinSpeed = float(self.Runoff[2])
                 self.RunoffTime = float(self.Runoff[3])                
             except:
-                logfile.Console('Command line error; -r incorrect %s' % args.Runoff)                
+                logfile.Console('Command line error; -r incorrect %s' % args.Runoff)
+
+        parser.add_argument('-i','--infoCF',    help='Show info for debugging',                             required=False, default=False)
+
 
         #-----------------------------------------------------------------------
         # Get TacxType

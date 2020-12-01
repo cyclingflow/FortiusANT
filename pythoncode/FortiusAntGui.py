@@ -1113,12 +1113,12 @@ class frmFortiusAntGuiOri(wx.Frame):
 # and toggle for small size /normal size window
 # ------------------------------------------------------------------------------
 #CF if true, extra info in GUI, 6 fields,
-Extra               = False
 Small               = False
 
 class frmFortiusAntGui(frmFortiusAntGuiOri):
 
     def __init__(self, parent, pclv):
+        self.Extra = pclv.ExtraFieldsCF
         self.IsSmallWindow = Small
         self.normalWindow={}
         self.initNormalWindow(parent, pclv)
@@ -1146,15 +1146,25 @@ class frmFortiusAntGui(frmFortiusAntGuiOri):
             except:
                 print('Cannot load '+ FortiusAnt_jpg)
 
+        #Adjust size speedo's'
+        size = self.Speed.GetSize()
+        self.Speed.SetSize(size[0]+4,size[1])
+        self.Revs.SetSize(size[0]+4,size[1])
+        self.Power.SetSize(size[0]+4,size[1])
+
         self.normalWindow['ExtraCtrlFont'] = \
-            ExtraCtrlFont= wx.Font(20, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
-        self.normalWindow['ExtraSize']=(self.Power.Position[0],
+             wx.Font(20, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+        self.txtTarget.SetFont(self.normalWindow['ExtraCtrlFont'])
+        self.txtTacx.SetFont(self.normalWindow['ExtraCtrlFont'])
+
+        self.normalWindow['ExtraPosition']=(self.Power.Position[0],
                                         self.Power.Position[1] + self.Power.Size[1])
-        self.normalWindow['ExtraPosition']=(133, 40)
-        self.addExtraTxtFields(self.normalWindow['ExtraSize'][0],
-                               self.normalWindow['ExtraSize'][1],
-                               self.normalWindow['ExtraPosition'][0],
+        self.normalWindow['ExtraSize']=(135, 40)
+
+        self.addExtraTxtFields(self.normalWindow['ExtraPosition'][0],
                                self.normalWindow['ExtraPosition'][1],
+                               self.normalWindow['ExtraSize'][0],
+                               self.normalWindow['ExtraSize'][1],
                                self.normalWindow['ExtraCtrlFont'])
 
         # Store Sizes and positions
@@ -1189,7 +1199,7 @@ class frmFortiusAntGui(frmFortiusAntGuiOri):
 
 
     def addExtraTxtFields(self, x, y, width, Height, ExtraCtrlFont):
-        if Extra:
+        if self.Extra:
             self.txtExtra1 = wx.TextCtrl(self, value="456", size=(width,Height),
                                          style=wx.TE_LEFT | wx.TE_READONLY | wx.BORDER_NONE)
             self.txtExtra1.SetBackgroundColour(bg)
@@ -1217,7 +1227,7 @@ class frmFortiusAntGui(frmFortiusAntGuiOri):
 
 
     def reSizePositionExtraTxtFields(self, x, y, width, Height, ExtraCtrlFont):
-        if Extra:
+        if self.Extra:
             self.txtExtra1.SetSize((width,Height))
             self.txtExtra1.SetPosition((x, y))
 
@@ -1277,8 +1287,11 @@ class frmFortiusAntGui(frmFortiusAntGuiOri):
         self.txtTarget.SetPosition(self.normalWindow['tTargetPosition'])
         self.txtTacx.SetSize(self.normalWindow['tTacxSize'])
         self.txtTacx.SetPosition(self.normalWindow['tTacxPosition'])
-        self.txtTarget.SetFont(self.normalWindow['TextCtrlFont'])
-        self.txtTacx.SetFont(self.normalWindow['TextCtrlFont'])
+        #self.txtTarget.SetFont(self.normalWindow['TextCtrlFont'])
+        #self.txtTacx.SetFont(self.normalWindow['TextCtrlFont'])
+        self.txtTarget.SetFont(self.normalWindow['ExtraCtrlFont'])
+        self.txtTacx.SetFont(self.normalWindow['ExtraCtrlFont'])
+
 
         self.txtUsbTrainer.SetSize(self.normalWindow['tUsbSize'])
         self.txtUsbTrainer.SetPosition(self.normalWindow['tUsbPosition'])
@@ -1287,11 +1300,11 @@ class frmFortiusAntGui(frmFortiusAntGuiOri):
         self.txtUsbTrainer.SetFont(self.normalWindow['TextCtrlFont2'])
         self.txtAntDongle.SetFont(self.normalWindow['TextCtrlFont2'])
 
-        self.reSizePositionExtraTxtFields(self.normalWindow['ExtraSize'][0],
-                                         self.normalWindow['ExtraSize'][1],
-                                         self.normalWindow['ExtraPosition'][0],
-                                         self.normalWindow['ExtraPosition'][1],
-                                         self.normalWindow['ExtraCtrlFont'])
+        self.reSizePositionExtraTxtFields(self.normalWindow['ExtraPosition'][0],
+                                          self.normalWindow['ExtraPosition'][1],
+                                          self.normalWindow['ExtraSize'][0],
+                                          self.normalWindow['ExtraSize'][1],
+                                          self.normalWindow['ExtraCtrlFont'])
 
     def reconfigureSmallWindow(self):
         self.SetWindowStyleFlag(wx.STAY_ON_TOP | wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))
@@ -1318,9 +1331,9 @@ class frmFortiusAntGui(frmFortiusAntGuiOri):
         SpeedWH     = int((BitmapW - ButtonW - 5 * Margin) / 3) # width/height equal (square)
 
         TextCtrlFont = wx.Font(21, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
-        TextCtrlH    = 37
+        TextCtrlH    = 38
         TextCtrlW    = int(SpeedWH/2)
-        TextCtrlFont2= wx.Font(12, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+        TextCtrlFont2= wx.Font(11, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
 
         # ----------------------------------------------------------------------
         # self.Speed Revs Power
@@ -1354,12 +1367,13 @@ class frmFortiusAntGui(frmFortiusAntGuiOri):
         # ----------------------------------------------------------------------
         # USB Trainer Ant Dongle
         # ----------------------------------------------------------------------
-        DeviceTxtWidth = 126
-        self.txtUsbTrainer.SetSize((DeviceTxtWidth, -1))
-        self.txtUsbTrainer.SetPosition((Margin, 1))
+        DeviceTxtWidth = 126*2
+        DeviceTxtHeight = 29
+        self.txtUsbTrainer.SetSize((DeviceTxtWidth, DeviceTxtHeight))
+        self.txtUsbTrainer.SetPosition((Margin, 0))
 
-        self.txtAntDongle.SetSize((DeviceTxtWidth, -1))
-        self.txtAntDongle.SetPosition((Margin+DeviceTxtWidth, 1))
+        self.txtAntDongle.SetSize((DeviceTxtWidth, DeviceTxtHeight))
+        self.txtAntDongle.SetPosition((Margin, self.txtTarget.Position[1] + self.txtTarget.Size[1]))
 
         self.txtUsbTrainer.SetFont(TextCtrlFont2)
         self.txtAntDongle.SetFont(TextCtrlFont2)
@@ -1368,15 +1382,15 @@ class frmFortiusAntGui(frmFortiusAntGuiOri):
         # Extra Txt Info fields
         # ----------------------------------------------------------------------
         ExtraH = 40
-        yExtra = self.txtTarget.Position[1] + self.txtTarget.Size[1] + ExtraH # why + ExtraH
-        if Extra:
+        yExtra = self.txtAntDongle.Position[1] + self.txtAntDongle.Size[1] + ExtraH # why + ExtraH
+        if self.Extra:
             ExtraCtrlFont= wx.Font(19, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
-            self.reSizePositionExtraTxtFields(Margin, self.txtTarget.Position[1] + self.txtTarget.Size[1],
+            self.reSizePositionExtraTxtFields(Margin, self.txtAntDongle.Position[1] + self.txtAntDongle.Size[1],
                                    126, ExtraH, ExtraCtrlFont)
 
-            self.SetSize((Margin+DeviceTxtWidth*2.12+Margin, yExtra+ExtraH*3+Margin*2))
+            self.SetSize((Margin+DeviceTxtWidth*1.06+Margin, yExtra+ExtraH*3+Margin*2))
         else:
-            self.SetSize((Margin+DeviceTxtWidth*2.12+2*Margin, yExtra+Margin*2))
+            self.SetSize((Margin+DeviceTxtWidth*1.06+2*Margin, yExtra+Margin*2))
 
 
     def OnClick_btnSwitchWindow(self, event):
@@ -1387,89 +1401,22 @@ class frmFortiusAntGui(frmFortiusAntGuiOri):
             self.reconfigureNormalWindow()
 
     def SetExtraValues(self, extra1, extra2, extra3, extra4, extra5, extra6):
-        if Extra:
+        if self.Extra:
             self.txtExtra1.SetValue('CR'+str(extra1))
             self.txtExtra2.SetValue('TR'+str(extra2))
             self.txtExtra3.SetValue('CS'+str(extra3))
-            self.txtExtra4.SetValue('?'+str(extra4))
-            self.txtExtra5.SetValue('AC'+str(extra5))
+            self.txtExtra4.SetValue('PF'+str(extra4))
+            self.txtExtra5.SetValue('CA'+str(extra5))
             self.txtExtra6.SetValue('AP'+str(extra6))
 
     def SetValues(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate, iTeeth, extra=None):
-        if not self.IsSmallWindow:
+        if extra != None:
             #CF we need to do this before super, because it updates self.LastFields
             delta = time.time() - self.LastFields # Delta time since previous
             if delta >= 1:                        # Refresh once per second
-                if extra != None:
-                    self.SetExtraValues(extra[0], extra[1], extra[2], extra[3], extra[4], extra[5])
-            #CF call orginal
-            super().SetValues(fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate, iTeeth)
-        else:
-            # ----------------------------------------------------------------------
-            # Average power over the last 10 readings
-            # ----------------------------------------------------------------------
-            self.PowerArray = numpy.append(self.PowerArray, iPower)     # Add new value to array
-            self.PowerArray = numpy.delete(self.PowerArray, 0)          # Remove oldest from array
-            iPowerMean = int(numpy.mean(self.PowerArray))               # Calculate average
-
-            # ----------------------------------------------------------------------
-            # Values are needed on OnPaint() event
-            # ----------------------------------------------------------------------
-            if iHeartRate > 40:
-                self.HeartRate    = iHeartRate
-            else:
-                self.HeartRate    = 0
-
-            # ----------------------------------------------------------------------
-            # Update measurements once per second only (otherwise too much flicker)
-            # .SetSpeedValue requires quite some processing, but since we are in our
-            #   own process since 29-4-2020 refresh all, no optimize needed.
-            # ----------------------------------------------------------------------
-            delta = time.time() - self.LastFields # Delta time since previous
-            if delta >= 1:                        # Refresh once per second
-                self.LastFields = time.time()     # Time in seconds
-                if extra != None:
-                    self.SetExtraValues(extra[0], extra[1], extra[2], extra[3], extra[4], extra[5])
-
-                if True:
-                    # Alternating suffix makes the texts being refreshed
-                    suffix1 = '.'                       # str(0x32) # space
-                    suffix2 = ','                       # str(0xa0) # no break space
-                    suffix = self.txtSpeed.Value[-1:]
-                    suffix = suffix2 if suffix == suffix1 else suffix1
-                else:
-                    # Such a measurement is not needed (anymore)
-                    suffix = ''
-
-                # 2020-02-07: LargeTexts implemented
-                self.txtSpeed.SetValue ("%4.1fkm/h"   % fSpeed  + suffix)
-                self.txtRevs.SetValue  ("%i/min"      % iRevs   + suffix)
-                self.txtPower.SetValue ("%iW"         % iPower  + suffix)
-                if iTacx == 0:
-                    self.txtTacx.SetValue  ("")
-                else:
-                    self.txtTacx.SetValue  ("%i"      % iTacx   + suffix)
-                fTargetPower = "%iW"
-
-                if   iTargetMode == mode_Power:
-                    self.txtTarget.SetValue(fTargetPower % iTargetPower + suffix)
-                elif iTargetMode == mode_Grade:
-                    s = "%2.0f%%" % fTargetGrade
-                    s += "%iW" % iTargetPower        # Target power added for reference
-                    # Can be negative!
-                    self.txtTarget.SetValue(s + suffix)
-                else:
-                    self.txtTarget.SetValue("No target"  + suffix)
-
-                if logfile.IsOpen() and debug.on(debug.Data1 | debug.Data2):
-                    Elapsed = time.time() - self.LastFields
-                    logfile.Write ("SetValues() done in %s ms" % int(Elapsed*1000))
-
-            #bRefreshRequired = False
-            # ----------------------------------------------------------------------
-            # Refresh if required; so that JPGs are drawn in the OnPaint() event
-            # ----------------------------------------------------------------------
-            #if bRefreshRequired: self.Refresh()
+                self.SetExtraValues(extra[0], extra[1], extra[2], extra[3], extra[4], extra[5])
+        #CF call orginal
+        super().SetValues(fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate, iTeeth)
 
 
     def SetMessages(self, Tacx=None, Dongle=None, HRM=None):
@@ -1481,7 +1428,10 @@ class frmFortiusAntGui(frmFortiusAntGuiOri):
                 self.txtUsbTrainer.SetValue(Tacx)
 
             if Dongle != None:
-                self.txtAntDongle.SetValue(Dongle[6:])
+                if Dongle[6:]=='Using':
+                    self.txtAntDongle.SetValue(Dongle[6:])
+                else:
+                    self.txtAntDongle.SetValue(Dongle)
         else:
             super().SetMessages(Tacx, Dongle, HRM)
 
@@ -1568,6 +1518,7 @@ class frmFortiusAntGui(frmFortiusAntGuiOri):
             self.btnLocateHW.Disable()
             self.btnLocateHW.Hide()
             self.btnSwitchWindow.Show()
+            self.btnSwitchWindow.Enable()
             self.btnStart.SetFocus()
         return rtn
 
@@ -1580,10 +1531,16 @@ class frmFortiusAntGui(frmFortiusAntGuiOri):
     def OnClick_btnStart(self, event=False):
         #CF prevent display sleep
         ctypes.windll.kernel32.SetThreadExecutionState(0x80000002)
+        self.btnLocateHW.Hide()
+        self.btnSwitchWindow.Show()
+        self.btnSwitchWindow.Enable()
         super().OnClick_btnStart((event))
 
     def OnClick_btnStop(self, event=False):
         #CF reinstate display sleeping
+        self.btnSwitchWindow.Hide()
+        self.btnSwitchWindow.Disable()
+        self.btnLocateHW.Show()
         ctypes.windll.kernel32.SetThreadExecutionState(0x80000000)
         super().OnClick_btnStop(event)
 
