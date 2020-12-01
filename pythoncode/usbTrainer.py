@@ -1745,8 +1745,7 @@ class clsTacx1901UsbTrainer(clsTacxUsbTrainer):
         self.OK         = True
 
         #Temporary tests
-        print("hier")
-
+        print("14eq")
 
 
     def _parseParameterValue(self, line):
@@ -2307,8 +2306,8 @@ class clsTacx1901UsbTrainer(clsTacxUsbTrainer):
 
 class clsSimplifiedTacx1901UsbTrainer(clsTacx1901UsbTrainer):
     _name = 'clsSimplifiedTacxUsb1901Trainer'
-    defaultSlopeFactor = [0.00448175378669, -2.38456777848987]
-    defaultInterceptFactor = [-0.00000856397364, 0.01920799469476, -38.72957422654344]
+    defaultSlopeFactor = [0.00315683728148, 1.08287399030252]
+    defaultInterceptFactor = [0.00000545293590, -0.04820367679414, 36.12724740421007]
     slopeFactor = defaultSlopeFactor
     interceptFactor = defaultInterceptFactor
 
@@ -2316,6 +2315,10 @@ class clsSimplifiedTacx1901UsbTrainer(clsTacx1901UsbTrainer):
     def __init__(self, clv, Message, Headunit, UsbDevice):
         #super().__init__(clv, Message)
         super().__init__(clv, Message, Headunit, UsbDevice)
+        print("simplified")
+        self.SpeedScale = 289.75
+        self.calCorrection = 1.07
+        #self.calCorrection = 1.0
         if debug.on(debug.Function):logfile.Write ("{}.__init__()".format(self._name))
 
         #Get the powercalc and grade factors
@@ -2332,7 +2335,18 @@ class clsSimplifiedTacx1901UsbTrainer(clsTacx1901UsbTrainer):
         self.slopeFactor = self.defaultSlopeFactor
         self.interceptFactor = self.defaultInterceptFactor
         #self.speedAtKnot = self._findMinimumKnotPosition()
-        self.speedAtKnot = 7 # everything starts at 15-17W at 7kph
+        self.speedAtKnot = 9 # everything starts at 15-17W at 7kph
+
+        #tests
+        # print(self._calcPowerAboveKnot(1,  9.07))
+        # print(self._calcPowerAboveKnot(1, 14.66))
+        # print(self._calcPowerAboveKnot(1, 19.68))
+        # print(self._calcPowerAboveKnot(1, 23.73))
+        # print(self._calcPowerAboveKnot(1, 29.52))
+        # print(self._calcPowerAboveKnot(1, 33.47))
+        # print(self._calcPowerAboveKnot(1, 37.23))
+
+
 
         #check knot positions, power seqence should be monotonically increasing
         #for resistanceLevel in range(0,14):
@@ -2340,7 +2354,10 @@ class clsSimplifiedTacx1901UsbTrainer(clsTacx1901UsbTrainer):
 
 
     def _calcPowerAboveKnot(self, resistanceLevel, speedKmh):
-        rL = self.sendResList[resistanceLevel] # or rL = resistanceLevel+1
+
+        #rL = self.sendResList[resistanceLevel] # or rL = resistanceLevel+1
+        rL = self.receivedResValues[resistanceLevel+1]
+        print(rL)
         slope = rL * self.slopeFactor[0] + self.slopeFactor[1]
         intercept = rL**2 * self.interceptFactor[0] +\
                     rL * self.interceptFactor[1] + self.interceptFactor[2]
