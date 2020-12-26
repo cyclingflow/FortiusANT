@@ -109,6 +109,8 @@ channel_HRM         = 1           # ANT+ channel for Heart Rate Monitor
 channel_HRM_s       = channel_HRM # slave=display or Cycle Training Program
 
 channel_PWR         = 2           # ANT+ Channel for Power Profile
+#channel_PWR_s       = channel_PWR
+channel_PWR_s       = 6
 
 channel_SCS         = 3           # ANT+ Channel for Speed Cadence Sensor
 channel_SCS_s       = channel_SCS # slave=display or Cycle Training Program
@@ -136,7 +138,9 @@ DeviceNumber_VHU    = 57594    #
 DeviceNumber_SCS    = 57595    #
 DeviceNumber_PWR    = 57596    #
 
-ModelNumber_FE      = 2875     # short antifier-value=0x8385, Tacx Neo=2875
+#ModelNumber_FE      = 2875     # short antifier-value=0x8385, Tacx Neo=2875
+ModelNumber_FE      = 2900     # Tacx Flux (S) Smart= 2900
+#ModelNumber_FE      = 2980     # Tacx Flux = 2980 Gen 2
 SerialNumber_FE     = 19590705 # int   1959-7-5
 HWrevision_FE       = 1        # char
 SWrevisionMain_FE   = 1        # char
@@ -193,6 +197,10 @@ msgID_RequestMessage                    = 0x4d
 
 msgID_ChannelID                         = 0x51          # Set, but also receive master channel - but how/when?
 msgID_ChannelTransmitPower              = 0x60
+
+msgID_SearchTimeout                     = 0x44
+msgID_LowPrioritySearchTimeout          = 0x63
+msgID_ProximitySearch                   = 0x71
 
 msgID_StartUp                           = 0x6f
 
@@ -727,6 +735,26 @@ class clsAntDongle():
         ]
         self.Write(messages)
 
+    def SlavePWR_ChannelConfig(self, DeviceNumber):
+        if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
+        else:                s = ", any device"
+        if self.OK:
+            logfile.Console ('FortiusANT receives data from an ANT+ Power and Cadence Sensor ' + s)
+            if debug.on(debug.Data1): logfile.Write ("SlavePWR_ChannelConfig()")
+        messages=[
+            msg42_AssignChannel         (channel_PWR_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
+            #TransmissionType_IC_GDP is essential
+            msg51_ChannelID             (channel_PWR_s, DeviceNumber, DeviceTypeID_PWR, TransmissionType_IC_GDP),
+            msg45_ChannelRfFrequency    (channel_PWR_s, RfFrequency_2457Mhz),
+            msg43_ChannelPeriod         (channel_PWR_s, ChannelPeriod=8182),        # 4,05 Hz
+            msg60_ChannelTransmitPower  (channel_PWR_s, TransmitPower_0dBm),
+            msg4B_OpenChannel           (channel_PWR_s),
+            msg4D_RequestMessage        (channel_PWR_s, msgID_ChannelID)
+        ]
+        self.Write(messages)
+
+
+
     def SCS_ChannelConfig(self, DeviceNumber):
         if self.OK:
             logfile.Console ('FortiusANT broadcasts data as an ANT+ Speed and Cadence Sensor (SCS), id=%s' % DeviceNumber_SCS)
@@ -1085,9 +1113,29 @@ def msg43_ChannelPeriod(ChannelNumber, ChannelPeriod):
     msg     = ComposeMessage (0x43, info)
     return msg
 
+
+# ------------------------------------------------------------------------------
+# A N T   M e s s a g e   44   S e a r c h T i m e o u t
+# each count = 2.5s
+# ------------------------------------------------------------------------------
+def msg44_SearchTimeout(ChannelNumber, count):
+    format  =    sc.no_alignment + sc.unsigned_char + sc.unsigned_char
+    info    = struct.pack(format,  ChannelNumber, count)
+    msg     = ComposeMessage (0x44, info)
+    return msg
+
+#CF debug
+def print_MSG(msg):
+    s=[]
+    for i in msg:
+        s.append(str(hex(i)))
+    print(",".join(s))
+
+
 # ------------------------------------------------------------------------------
 # A N T   M e s s a g e   45   C h a n n e l R f F r e q u e n c y
 # ------------------------------------------------------------------------------
+#"a4 02 45 00 39 da 00 00", #45 channel freq
 def msg45_ChannelRfFrequency(ChannelNumber, RfFrequency):
     format  =    sc.no_alignment + sc.unsigned_char + sc.unsigned_char
     info    = struct.pack(format,  ChannelNumber,     RfFrequency)
@@ -1160,6 +1208,29 @@ def msg60_ChannelTransmitPower(ChannelNumber, TransmitPower):
     msg     = ComposeMessage (0x60, info)
     return msg
 
+
+# ------------------------------------------------------------------------------
+# A N T   M e s s a g e   63   L o w P r i o r i ty S e a r c h T i m e o u t
+# each count = 2.5s
+# ------------------------------------------------------------------------------
+def msg63_LowPrioritySearchTimeout(ChannelNumber, count):
+    format  =    sc.no_alignment + sc.unsigned_char + sc.unsigned_char
+    info    = struct.pack(format,  ChannelNumber, count )
+    msg     = ComposeMessage (0x63, info)
+    return msg
+
+
+# ------------------------------------------------------------------------------
+# A N T   M e s s a g e   71   P r o x i m i t y S e a r c h
+# thresholdBin 0 = disabled, 1:10 closest to farthest bin
+# ------------------------------------------------------------------------------
+def msg71_ProximitySearch(ChannelNumber, thresholdBin):
+    format  =    sc.no_alignment + sc.unsigned_char + sc.unsigned_char
+    info    = struct.pack(format,  ChannelNumber, thresholdBin)
+    msg     = ComposeMessage (0x71, info)
+    return msg
+
+
 # ------------------------------------------------------------------------------
 # U n m s g 6 4   C h a n n e l R e s p o n s e
 # ------------------------------------------------------------------------------
@@ -1208,6 +1279,42 @@ def msgPage16_PowerOnly (Channel, EventCount, Cadence, AccumulatedPower, Current
     info   = struct.pack(format, Channel,   DataPageNumber,   EventCount,   0xff,         Cadence,                AccumulatedPower,   CurrentPower)
 
     return info
+
+
+def msgUnpage16_PowerOnly (info):
+    fChannel              = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber       = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fEventCount           = sc.unsigned_char
+    fPedalPower           = sc.unsigned_char
+    fInstantaneousCadence = sc.unsigned_char
+    fAccumulatedPower     = sc.unsigned_short
+    fInstantaneousPower   = sc.unsigned_short
+
+    format      = sc.no_alignment + fChannel + fDataPageNumber + fEventCount + fPedalPower + \
+                  fInstantaneousCadence + fAccumulatedPower + fInstantaneousPower
+    tuple = struct.unpack (format, info)
+
+    return tuple[0], tuple[1], tuple[2], tuple[3], tuple[4], tuple[5], tuple[6]
+
+
+def msgUnpage18_CrankTorque (info):
+    #msg=0x4e ch=6 p=18 info="06 12 72 72 00 7f 66 bf 70"
+    #msg=0x4e ch=6 p=18 info="06 12 72 72 00 7f 66 bf 70"
+    fChannel              = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber       = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fEventCount           = sc.unsigned_char
+    fTick                 = sc.unsigned_char  #Wheel/Crank Revolutions counter
+    fData                 = sc.unsigned_char  #unknown
+    fAccumulatedPeriod    = sc.unsigned_short # (1/2048 s).
+    fAccumulatedTorque    = sc.unsigned_short # (1/32 Nm).
+
+    format      = sc.no_alignment + fChannel + fDataPageNumber + fEventCount + \
+                  fTick + fData + fAccumulatedPeriod + fAccumulatedTorque
+    tuple = struct.unpack (format, info)
+
+    return tuple[0], tuple[1], tuple[2], tuple[3], tuple[5], tuple[6]
+
+
 
 # ------------------------------------------------------------------------------
 # P a g e 0 0   T a c x V o r t e x D a t a S p e e d

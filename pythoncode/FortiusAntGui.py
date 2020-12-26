@@ -764,7 +764,7 @@ class frmFortiusAntGuiOri(wx.Frame):
                 self.txtTarget.SetValue(fTargetPower % iTargetPower + suffix)
 
             elif iTargetMode == mode_Grade:
-                s = "%2.0f%%" % fTargetGrade
+                s = "%3.1f%%" % fTargetGrade
                 s += "%iW" % iTargetPower        # Target power added for reference
                                                  # Can be negative!
                 self.txtTarget.SetValue(s + suffix)
@@ -1404,10 +1404,10 @@ class frmFortiusAntGui(frmFortiusAntGuiOri):
         if self.Extra:
             self.txtExtra1.SetValue('CR'+str(extra1))
             self.txtExtra2.SetValue('TR'+str(extra2))
-            self.txtExtra3.SetValue('CS'+str(extra3))
-            self.txtExtra4.SetValue('PF'+str(extra4))
+            self.txtExtra3.SetValue('PR'+str(extra3))
+            self.txtExtra4.SetValue('HR'+str(extra4))
             self.txtExtra5.SetValue('CA'+str(extra5))
-            self.txtExtra6.SetValue('AP'+str(extra6))
+            self.txtExtra6.SetValue('XP'+str(extra6))
 
     def SetValues(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate, iTeeth, extra=None):
         if extra != None:
@@ -1541,6 +1541,7 @@ class frmFortiusAntGui(frmFortiusAntGuiOri):
         self.btnSwitchWindow.Hide()
         self.btnSwitchWindow.Disable()
         self.btnLocateHW.Show()
+        self.btnLocateHW.Enable()
         ctypes.windll.kernel32.SetThreadExecutionState(0x80000000)
         super().OnClick_btnStop(event)
 

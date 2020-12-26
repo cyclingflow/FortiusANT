@@ -229,6 +229,11 @@ if AntDongle.OK and not clv.SimulateTrainer:
                         if clv.vhu <= 0: clv.vhu = DeviceNumber
                         DeviceType = 'VHU'
 
+                    elif DeviceTypeID == ant.DeviceTypeID_PWR:
+                        if clv.pwr <= 0: clv.pwr = DeviceNumber
+                        DeviceType = 'PWR'
+
+
                     else:
                         DeviceType = '?'
 
@@ -361,6 +366,11 @@ while AntDongle.OK:
                 AntDongle.SlaveVHU_ChannelConfig(clv.vhu)
                 logfile.Console ('VHU slave channel %s opened; listening to master device %s' % (ant.channel_VHU_s, 0))
 
+            if clv.pwr > 0:
+                AntDongle.SlavePWR_ChannelConfig(clv.pwr)
+                logfile.Console ('PWR slave channel %s opened; listening to master device %s' % (ant.channel_PWR_s, clv.pwr))
+
+
         # ----------------------------------------------------------------------
         # Get info from the devices
         # ----------------------------------------------------------------------
@@ -373,6 +383,15 @@ while AntDongle.OK:
             HRM_HeartRate       = -1
             HRM_page2_done      = False
             HRM_page3_done      = False
+
+            #CF
+            PWR_s_count         = 0
+            PWR_s_Cadence       = 0
+            PWR_s_Power         = 0
+            PWR_s_AccuPower     = 0
+            PWR_s_PowerA        = 0
+            PWR_s_LastPower     = 0
+
 
             FE_s_count          = 0
             FE_Power            = -1
@@ -519,6 +538,43 @@ while AntDongle.OK:
                             #---------------------------------------------------
                             elif DataPageNumber == 89:
                                 Unknown = True
+
+                        #-------------------------------------------------------
+                        # PRM_s = Bike Power Sensor Display
+                        # We are slave, listening to a master (Bike Power Sensor)
+                        #-------------------------------------------------------
+                        if Channel == ant.channel_PWR_s:
+                            #print('power message received page = {}'.format(DataPageNumber))
+                            if DataPageNumber & 0x7f == 16:
+                                Unknown = False
+                                _Channel, _DataPageNumber, _EventCount, _PedalPower, \
+                                _InstantaneousCadence, _AccumulatedPower, _InstantaneousPower = \
+                                    ant.msgUnpage16_PowerOnly(info)
+                                PWR_s_count = _EventCount
+                                PWR_s_Power = _InstantaneousPower
+                                PWR_s_Cadence = _InstantaneousCadence
+                                PWR_s_AccuPower = _AccumulatedPower
+                                PWR_s_PowerA = _AccumulatedPower - PWR_s_LastPower
+                                PWR_s_LastPower = PWR_s_Power
+
+                            elif DataPageNumber & 0x7f == 18:
+                                Unknown = False
+                                _Channel, _DataPageNumber, _EventCount, _Tick, \
+                                _AccumulatedPeriod, _AccumulatedTorque = \
+                                    ant.msgUnpage18_CrankTorque(info)
+                                PWR_s_Tick = _Tick
+                                PWR_s_TPeriod = _AccumulatedPeriod
+                                PWR_s_AccuTorque = _AccumulatedTorque/32
+
+                            elif DataPageNumber & 0x7f == 19:
+                                Unknown = False
+                                #pass
+                            else:
+                                Unknown = True
+
+                            #msg=0x4e ch=6 p=18 info="06 12 72 72 00 7f 66 bf 70"
+                            #msg=0x4e ch=6 p=18 info="06 12 72 72 00 7f 66 bf 70"
+                            #msg=0x4e ch=6 p=19 info="06 13 72 00 ff 00 ff ff ff"
 
                         #-------------------------------------------------------
                         # FE_s = Cycle Training Program (e.g. Zwift, Trainer Road)
@@ -748,13 +804,23 @@ while AntDongle.OK:
                                         )
 
                     else:
-                        logfile.Console ("HRM#=%2s hr=%3s FE-C#=%2s Speed=%4s Cadence=%3s Power=%3s hr=%3s SCS#=%2s VTX ID=%s Speed=%4s Cadence=%3s Target=%s" % \
+                        # logfile.Console ("HRM#=%2s hr=%3s FE-C#=%2s Speed=%4s Cadence=%3s Power=%3s hr=%3s SCS#=%2s VTX ID=%s Speed=%4s Cadence=%3s Target=%s" % \
+                        #                  (HRM_s_count, HRM_HeartRate, \
+                        #                   FE_s_count, FE_Speed, FE_Cadence, FE_Power, FE_HeartRate, \
+                        #                   SCS_s_count, \
+                        #                   VTX_VortexID, VTX_Speed, VTX_Cadence, Power
+                        #                  )\
+                        #                 )
+                        logfile.Console ("HRM#=%2s hr=%3s  Speed=%4s Cadence=%3s Power=%3s Torque=%3s SCS#=%2s Target=%s" % \
                                          (HRM_s_count, HRM_HeartRate, \
-                                          FE_s_count, FE_Speed, FE_Cadence, FE_Power, FE_HeartRate, \
+                                          FE_Speed, PWR_s_Cadence, PWR_s_Power, PWR_s_AccuTorque, \
                                           SCS_s_count, \
-                                          VTX_VortexID, VTX_Speed, VTX_Cadence, Power
+                                          Power
                                          )\
                                         )
+
+
+
 
                 #-------------------------------------------------------
                 # Set Tacx Vortex power, once per second

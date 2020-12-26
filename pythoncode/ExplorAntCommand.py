@@ -28,6 +28,7 @@ class CommandLineVariables(object):
     scs             = -1            # Speed and cadence sensor
     vtx             = -1            # i-Vortex
     vhu             = -1            # i-Vortex Headunit
+    pwr             = -1            # Bike Power Sensor
     SimulateTrainer = False
 
     #---------------------------------------------------------------------------
@@ -46,6 +47,7 @@ class CommandLineVariables(object):
         parser.add_argument('-F','--fe',        help='Pair with this Fitness Equipment',    required=False, default=False)
         parser.add_argument('-S','--scs',       help='Pair with this Speed Cadence Sensor', required=False, default=False)
         parser.add_argument('-V','--vtx',       help='Pair with this Tacx i-Vortex trainer',required=False, default=False)
+        parser.add_argument('-P','--pwr',       help='Pair with this Bike Power Sensor',    required=False, default=False)
         args                 = parser.parse_args()
         self.args            = args
 
@@ -107,6 +109,14 @@ class CommandLineVariables(object):
             except:
                 logfile.Console('Command line error; -V incorrect Tacx i-Vortex=%s' % args.fe)
 
+        if args.pwr:
+            try:
+                self.pwr = int(args.pwr)
+            except:
+                logfile.Console('Command line error; -P incorrect Bike Power Sensor=%s' % args.fe)
+
+
+
     def print(self):
         try:
             v = debug.on(debug.Any)     # Verbose: print all command-line variables with values
@@ -118,6 +128,8 @@ class CommandLineVariables(object):
             if v or self.args.fe:            logfile.Console ("-F %s (%s)" % (self.fe,     hex(self.fe     ) ) )
             if v or self.args.scs:           logfile.Console ("-S %s (%s)" % (self.scs,    hex(self.scs    ) ) )
             if v or self.args.vtx:           logfile.Console ("-V %s (%s)" % (self.vtx,    hex(self.vtx    ) ) )
+            #CF
+            if v or self.args.pwr:           logfile.Console ("-P %s (%s)" % (self.vtx,    hex(self.vtx    ) ) )
         except:
             pass # May occur when incorrect command line parameters, error already given before
 

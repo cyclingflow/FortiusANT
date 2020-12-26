@@ -518,6 +518,7 @@ def Tacx2DongleSub(self, Restart):
     assert(TacxTrainer)                     # The class must be created
 
     AntHRMpaired = False
+    AntPWRpaired = False
 
     #---------------------------------------------------------------------------
     # Command status data
@@ -536,8 +537,15 @@ def Tacx2DongleSub(self, Restart):
     HeartRate       = 0         # This field is displayed
                                 # We have two sources: the trainer or
                                 # our own HRM slave channel.
-    #Cadence        = 0         # Analogously for Speed Cadence Sensor
+    #CF
+    Cadence        = 0          # Analogously for Speed Cadence Sensor
                                 # But is not yet implemented
+    XPower         = 0          # X Power is displayed and possibly logged
+    XPowerEvent    = 0
+    XPowerAccu     = 0
+    XPowerA        = 0
+
+
     #---------------------------------------------------------------------------
     # Pedal stroke Analysis
     #---------------------------------------------------------------------------
@@ -557,6 +565,8 @@ def Tacx2DongleSub(self, Restart):
     AntDongle.ResetDongle()             # reset dongle
     AntDongle.Calibrate()               # calibrate ANT+ dongle
     AntDongle.Trainer_ChannelConfig()   # Create ANT+ master channel for FE-C
+    #CF
+    AntDongle.PowerDisplay_unused()
     
     if clv.hrm == None:
         AntDongle.HRM_ChannelConfig()   # Create ANT+ master channel for HRM
@@ -574,6 +584,10 @@ def Tacx2DongleSub(self, Restart):
         #-------------------------------------------------------------------
         # msg = ant.msg4D_RequestMessage(ant.channel_HRM_s, ant.msgID_ChannelID)
         # AntDongle.Write([msg], False, False)
+
+    #CF
+    if clv.eXtPower!= None and clv.eXtPower> 0:
+        AntDongle.SlavePWR_ChannelConfig(clv.eXtPower)
 
     if clv.Tacx_iVortex:
         #-------------------------------------------------------------------
@@ -729,10 +743,15 @@ def Tacx2DongleSub(self, Restart):
     if not Restart:
         if clv.exportTCX:
             tcx.Start()                     # Start TCX export
-        if clv.manualGrade:
-            TacxTrainer.SetGrade(0)
+        #CF
+        #if clv.manualGrade:
+        #    TacxTrainer.SetGrade(0)
+        #else:
+        #    TacxTrainer.SetPower(100)
+        if clv.manual:
+            TacxTrainer.SetPower(50)
         else:
-            TacxTrainer.SetPower(100)
+            TacxTrainer.SetGrade(0)
         TacxTrainer.ResetPowercurveFactor()
 
     TargetPowerTime         = 0             # Time that last TargetPower received
@@ -775,6 +794,7 @@ def Tacx2DongleSub(self, Restart):
     
     if debug.on(debug.Function): logfile.Write('Tacx2Dongle; start main loop')
     try:
+        QuarterCount = 0
         while self.RunningSwitch == True and not AntDongle.DongleReconnected:
             StartTime = time.time()
             #-------------------------------------------------------------------
@@ -784,6 +804,7 @@ def Tacx2DongleSub(self, Restart):
             if (time.time() - LastANTtime) > 0.25 or not clv.PedalStrokeAnalysis:
                 LastANTtime = time.time()
                 QuarterSecond = True
+                QuarterCount = (QuarterCount + 1)%4
             else:
                 QuarterSecond = False 
 
@@ -813,10 +834,6 @@ def Tacx2DongleSub(self, Restart):
             #-------------------------------------------------------------------
 
             #CF extra
-            if hasattr(TacxTrainer, 'CurrentPowerR'):
-                PF =  TacxTrainer.CurrentPowerR
-            else:
-                PF=0
             self.SetValues(TacxTrainer.VirtualSpeedKmh,
                             TacxTrainer.Cadence, \
                             TacxTrainer.CurrentPower, \
@@ -828,10 +845,10 @@ def Tacx2DongleSub(self, Restart):
                             TacxTrainer.Teeth,
                            (TacxTrainer.CurrentResistance,
                             TacxTrainer.TargetResistance,
-                            TacxTrainer.CalibrateSend,
-                            PF,
-                            TacxTrainer.Cadence,
-                            TacxTrainer.AvePower))
+                            TacxTrainer.CurrentPowerR,
+                            HeartRate,
+                            Cadence,
+                            XPower))
 
 
 #-------------------------------------------------------------------
@@ -843,7 +860,9 @@ def Tacx2DongleSub(self, Restart):
             #-------------------------------------------------------------------
             # Store in JSON format
             #-------------------------------------------------------------------
-            logfile.WriteJson(QuarterSecond, TacxTrainer, tcx, HeartRate)
+            #CF every second for now
+            logfile.WriteJson(QuarterSecond, QuarterCount, TacxTrainer, tcx,
+                              (HeartRate, Cadence, XPower, XPowerA))
 
             #-------------------------------------------------------------------
             # Pedal Stroke Analysis
@@ -871,20 +890,23 @@ def Tacx2DongleSub(self, Restart):
                 elif TacxTrainer.Buttons == usbTrainer.UpButton:        TacxTrainer.AddPower( PowerButtonStepSize)
                 elif TacxTrainer.Buttons == usbTrainer.CancelButton:    self.RunningSwitch = False
                 else:                                                   pass
-            elif clv.manualGrade:
+            #CF
+            #elif clv.manualGrade:
+            else:
                 if   TacxTrainer.Buttons == usbTrainer.EnterButton:     pass
                 elif TacxTrainer.Buttons == usbTrainer.DownButton:      TacxTrainer.AddGrade(-1)
                 elif TacxTrainer.Buttons == usbTrainer.OKButton:        TacxTrainer.SetGrade(0)
                 elif TacxTrainer.Buttons == usbTrainer.UpButton:        TacxTrainer.AddGrade( 1)
                 elif TacxTrainer.Buttons == usbTrainer.CancelButton:    self.RunningSwitch = False
                 else:                                                   pass
-            else:
-                if   TacxTrainer.Buttons == usbTrainer.EnterButton:     pass
-                elif TacxTrainer.Buttons == usbTrainer.DownButton:      TacxTrainer.SetPowercurveFactorDown()
-                elif TacxTrainer.Buttons == usbTrainer.OKButton:        TacxTrainer.ResetPowercurveFactor()
-                elif TacxTrainer.Buttons == usbTrainer.UpButton:        TacxTrainer.SetPowercurveFactorUp()
-                elif TacxTrainer.Buttons == usbTrainer.CancelButton:    self.RunningSwitch = False
-                else:                                                   pass
+            #CF dont want this
+            # else:
+            #     if   TacxTrainer.Buttons == usbTrainer.EnterButton:     pass
+            #     elif TacxTrainer.Buttons == usbTrainer.DownButton:      TacxTrainer.SetPowercurveFactorDown()
+            #     elif TacxTrainer.Buttons == usbTrainer.OKButton:        TacxTrainer.ResetPowercurveFactor()
+            #     elif TacxTrainer.Buttons == usbTrainer.UpButton:        TacxTrainer.SetPowercurveFactorUp()
+            #     elif TacxTrainer.Buttons == usbTrainer.CancelButton:    self.RunningSwitch = False
+            #     else:                                                   pass
 
             #-------------------------------------------------------------------
             # Do ANT work every 1/4 second
@@ -971,6 +993,9 @@ def Tacx2DongleSub(self, Restart):
 
                             # 2020-11-04 as requested in issue 119
                             # The percentage is used to calculate grade 0...20%
+                            if debug.on(debug.Application):
+                                logfile.Write('page 48: Grade set to {}'.format(ant.msgUnpage48_BasicResistance(info) * 20))
+
                             TacxTrainer.SetGrade(ant.msgUnpage48_BasicResistance(info) * 20)
                             TacxTrainer.SetRollingResistance(0.004)
                             TacxTrainer.SetWind(0.51, 0.0, 1.0)
@@ -1034,7 +1059,12 @@ def Tacx2DongleSub(self, Restart):
                                     logfile.Write('PowerMode: Grade info ignored')
                                 pass
                             else:
+                                #CF: Note taht Rouvy selects a smaller range depending on the trainer connected
+                                # Flux (S) below zero is normal, from 2% and up to max to +12.68
                                 Grade, RollingResistance = ant.msgUnpage51_TrackResistance(info)
+                                if debug.on(debug.Application):
+                                    logfile.Write('page 51: Grade set to {}'.format(Grade))
+
                                 TacxTrainer.SetGrade(Grade)
                                 TacxTrainer.SetRollingResistance(RollingResistance)
                                 PowerModeActive       = ''
@@ -1160,7 +1190,7 @@ def Tacx2DongleSub(self, Restart):
                     #-----------------------------------------------------------
                     # Speed Cadence Sensor inputs
                     #-----------------------------------------------------------
-                    elif Channel == ant.channel_SCS:
+                    elif Channel == ant.channel_SCS_s:
                         #-------------------------------------------------------
                         # Data page 0 CSC data
                         # Only expected when -S flag specified
@@ -1180,6 +1210,44 @@ def Tacx2DongleSub(self, Restart):
                         #-------------------------------------------------------
                         else: error = "Unknown SCS data page"
 
+
+                    #-----------------------------------------------------------
+                    # CF:  Power Sensor inputs
+                    #-----------------------------------------------------------
+                    elif Channel == ant.channel_PWR_s:
+                        if not AntPWRpaired:
+                            msg = ant.msg4D_RequestMessage(ant.channel_PWR_s, ant.msgID_ChannelID)
+                            AntDongle.Write([msg], False, False)
+
+                        #-------------------------------------------------------
+                        # Data page 16? PWR data
+                        # Only expected when -X flag specified
+                        #-------------------------------------------------------
+                        if DataPageNumber & 0x7f == 16:
+                            if clv.eXtPower!= None and clv.eXtPower >= 0:
+                                _Channel, _DataPageNumber, _EventCount, _PedalPower,  \
+                                _InstantaneousCadence, _AccumulatedPower, _InstantaneousPower = \
+                                    ant.msgUnpage16_PowerOnly(info)
+                                Cadence = _InstantaneousCadence
+                                XPower = _InstantaneousPower
+                                if (_EventCount>XPowerEvent):
+                                    XPowerA = ((_AccumulatedPower - XPowerAccu)%65536)  /\
+                                              ((_EventCount - XPowerEvent)%256)
+                                    XPowerAccu  = _AccumulatedPower
+                                    XPowerEvent = _EventCount
+                            else:
+                                pass                            # Ignore it
+
+                        #-------------------------------------------------------
+                        # Other data pages
+                        #-------------------------------------------------------
+                        elif DataPageNumber in (17, 18, 19, 81, 85):
+                            pass                                # Ignore it
+
+                        else:
+                            error = "Unknown PWR data page %s"%DataPageNumber
+
+
                     #-----------------------------------------------------------
                     # Unknown channel
                     #-----------------------------------------------------------
@@ -1197,7 +1265,11 @@ def Tacx2DongleSub(self, Restart):
 
                     elif Channel == ant.channel_HRM_s and DeviceTypeID == ant.DeviceTypeID_HRM:
                         AntHRMpaired = True
-                        self.SetMessages(HRM='Heart Rate Monitor paired: %s' % DeviceNumber)
+                        #self.SetMessages(HRM='Heart Rate Monitor paired: %s' % DeviceNumber)
+
+                    elif Channel == ant.channel_PWR_s and DeviceTypeID == ant.DeviceTypeID_PWR:
+                        AntPWRpaired = True
+                        self.SetMessages(HRM='Power Sensor paired: %s' % DeviceNumber)
 
                     else:
                         logfile.Console('Unexpected device %s on channel %s' % (DeviceNumber, Channel))

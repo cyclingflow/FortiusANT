@@ -65,7 +65,8 @@ class CommandLineVariables(object):
     RunoffDip       = False
     RunoffMinSpeed  = False
     RunoffTime      = False
-    ExtraFieldsCF   = False
+    ExtraFieldsCF   = False      # CF
+    eXtPower        = None       # CF ant Power; None=not specified, numeric=HRM device, -1=no HRM
 
     uphill          = False      # introduced 2020-10-09; Negative grade is ignored
 
@@ -109,16 +110,15 @@ class CommandLineVariables(object):
         parser.add_argument('-m','--manual',    help='Run manual power (ignore target from ANT+ Dongle)',   required=False, action='store_true')
         parser.add_argument('-M','--manualGrade',help='Run manual grade (ignore target from ANT+ Dongle)',  required=False, action='store_true')
         parser.add_argument('-n','--calibrate', help='Do not calibrate before start',                       required=False, action='store_false')
-        parser.add_argument('-p','--factor',    help='Adjust target Power by multiplying by this factor for static calibration',
-                                                                                                            required=False, default=False)
-        parser.add_argument('-P','--PowerMode', help='Power mode has preference over Resistance mode (for 30 seconds)',
-                                                                                                            required=False, action='store_true')
-        parser.add_argument('-r','--Runoff',    help='(max_speed, dip, min_speed, target_time)',            required=False, default=False)        
+        parser.add_argument('-p','--factor',    help='Adjust target Power by multiplying by this factor for static calibration', required=False, action='store_true')
+        parser.add_argument('-P','--PowerMode', help='Power mode has preference over Resistance mode (for 30 seconds)', required=False, action='store_true')
+        parser.add_argument('-r','--Runoff',    help='(max_speed, dip, min_speed, target_time)',            required=False, default=False)
         parser.add_argument('-s','--simulate',  help='Simulated trainer to test ANT+ connectivity',         required=False, action='store_true')
 #scs    parser.add_argument('-S','--scs',       help='Pair this Speed Cadence Sensor (0: default device)',  required=False, default=False)
         parser.add_argument('-t','--TacxType',  help='Specify Tacx Type; e.g. i-Vortex, default=autodetect',required=False, default=False)
         parser.add_argument('-u','--uphill',    help='Uphill only; negative grade is ignored',              required=False, action='store_true')
         parser.add_argument('-x','--exportTCX', help='Export TCX file',                                     required=False, action='store_true')
+        parser.add_argument('-X','--eXtPower',  help='Pair this bike Power meter (0: any, -1: none)',       required=False, default=False)
 
         #-----------------------------------------------------------------------
         # Deprecated
@@ -245,6 +245,13 @@ class CommandLineVariables(object):
                 self.hrm = int(args.hrm)
             except:
                 logfile.Console('Command line error; -H incorrect HRM=%s' % args.hrm)
+
+        if args.eXtPower:
+            try:
+                self.eXtPower = int(args.eXtPower)
+            except:
+                logfile.Console('Command line error; -X incorrect PWR=%s' % args.eXtPower)
+
 
         #-----------------------------------------------------------------------
         # Get SCS

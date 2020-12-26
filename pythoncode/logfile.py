@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-13"
+__version__ = "2020-11-25"
+# 2020-11-25    Small textual modifications (time->Time)
+#               .utcnow() replaced by .now()
+# 2020-11-19    json PedalEcho added and time-format made JAVA-style
 # 2020-11-13    json logfile added
 # 2020-04-28    Logfile flushed as well
 # 2020-04-17    Open() provides suffix option
@@ -34,29 +37,69 @@ class clsLogfileJson():
         self.first          = True  # Comma preceeds next record (not the 1st)
         self.jsonFile       = None  # Not opened yet
         self.NrTrackpoints  = None  # To detect new trackpoint
+        self.PedalCycle     = 0     # 0 or 50 during one pedal cycle
+        self.LastPedalEcho  = 0     # Previous pedalecho from TacxTrainer
         # Create JSON file
         self.jsonFile = open(filename,"w+")
         self.jsonFile.write('[\n')
 
-    def Write(self, QuarterSecond, TacxTrainer, tcx, HeartRate):
+    def Write(self, QuarterSecond, QuarterCount, TacxTrainer, tcx, wasHR):
+        (HeartRate, Cadence, XPower, XPowerA) = wasHR
         if self.first:  self.first = False
-        else:           self.jsonFile.write(',')	
-        s = '{"time"                :  %s ,' % (time.time() / (24 * 3600))          + \
+        else:           self.jsonFile.write(',')
+
+        #-----------------------------------------------------------------------
+        # The json file is intended to analyze the data
+        # It is interesting to see what measurements are done per pedal rotation
+        # PedalCycle is set to 50, so it can be displayed on the speed-scale
+        #
+        # PedalCycle changes when PedalEcho goes from 0 --> 1
+        #-----------------------------------------------------------------------
+        if self.LastPedalEcho == 0 and TacxTrainer.PedalEcho == 1:
+            if self.PedalCycle == 0:
+                self.PedalCycle = 50
+            else:
+                self.PedalCycle = 0
+        self.LastPedalEcho = TacxTrainer.PedalEcho
+        #-----------------------------------------------------------------------
+        # Add all usefull variables
+        #-----------------------------------------------------------------------
+        # datetime.now() is not understood by Excel.
+        # "2012-04-23T18:25:43.511Z" is not understood either (altough 'standard')
+        # time.time() / (24 * 3600) is excel-style, but offset is different
+        #       We add 25569 so that Excel understands it.
+        #       It' does not account for summer/wintertime...
+        #-----------------------------------------------------------------------
+        # = '{"Time"                : "%s",' % datetime.now()                       + \
+        # = '{"Time"                : "%s",' % datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ") + \
+        #CF    ' "Target"              : "|" ,'                                        + \
+        #CF    ' "TacxTrainer"         : "|" ,'
+        #CF ' "Cadence"             :  %s ,' % TacxTrainer.Cadence                  + \        # + \
+        s = '{"Time"                :  %s ,' % ((time.time() / (24 * 3600)) + 25569)+ \
             ' "QuarterSecond"       : "%s",' % QuarterSecond                        + \
+            ' "QuarterCount"        : "%s",' % QuarterCount                         + \
             ' "HeartRate"           :  %s ,' % HeartRate                            + \
-            ' "Target"              : "|" ,'                                        + \
             ' "TargetMode"          :  %s ,' % TacxTrainer.TargetMode               + \
             ' "TargetGrade"         :  %s ,' % TacxTrainer.TargetGrade              + \
             ' "TargetPower"         :  %s ,' % TacxTrainer.TargetPower              + \
             ' "TargetResistance"    :  %s ,' % TacxTrainer.TargetResistance         + \
-            ' "TacxTrainer"         : "|" ,'                                        + \
-            ' "Cadence"             :  %s ,' % TacxTrainer.Cadence                  + \
+            ' "Cadence"             :  %s ,' % Cadence                              + \
+            ' "XPower"              :  %s ,' % XPower                               + \
+            ' "XPowerA"             :  %s ,' % XPowerA                              + \
             ' "CurrentPower"        :  %s ,' % TacxTrainer.CurrentPower             + \
+            ' "CurrentPowerR"       :  %s ,' % TacxTrainer.CurrentPowerR            + \
             ' "CurrentResistance"   :  %s ,' % TacxTrainer.CurrentResistance        + \
+            ' "WheelSpeed"          :  %s ,' % TacxTrainer.WheelSpeed               + \
+            ' "EffSpeedDif"         :  %s ,' % TacxTrainer.EffectiveSpeedDif        + \
             ' "SpeedKmh"            :  %s ,' % TacxTrainer.SpeedKmh                 + \
             ' "VirtualSpeedKmh"     :  %s ,' % TacxTrainer.VirtualSpeedKmh          + \
-            ' "CalculatedSpeedKmh"  :  %s ,' % TacxTrainer.CalculatedSpeedKmh
+            ' "CalculatedSpeedKmh"  :  %s ,' % TacxTrainer.CalculatedSpeedKmh       + \
+            ' "PedalEcho"           :  %s ,' % TacxTrainer.PedalEcho                + \
+            ' "PedalCycle"          :  %s ,' % self.PedalCycle
 
+        #-----------------------------------------------------------------------
+        # TCX only when active
+        #-----------------------------------------------------------------------
         if tcx != None and tcx.NrTrackpoints != self.NrTrackpoints:
             self.NrTrackpoints = tcx.NrTrackpoints
             s += \
@@ -72,9 +115,8 @@ class clsLogfileJson():
             ' "TrackpointCadence"   :  %s ,' % tcx.TrackpointCadence                + \
             ' "TrackpointCurrentPower":%s ,' % tcx.TrackpointCurrentPower           + \
             ' "TrackpointSpeedKmh"  :  %s ,' % tcx.TrackpointSpeedKmh
-
-        s +=' "End"                 : "|" '                                         + \
-            '}\n'
+        #s +=' "End"                 : "|" '
+        s = s[:-1]+'}\n'
         self.jsonFile.write(s.replace(' ', ''))
 
     def Close(self):
@@ -98,7 +140,7 @@ def Open(prefix='FortiusANT', suffix=''):
     if debug.on():
         if len(suffix) > 0 and suffix[0] != '.':
             suffix = '.' + suffix
-        filename = prefix + '.' + datetime.utcnow().strftime('%Y-%m-%d %H-%M-%S') + suffix + ".log"
+        filename = prefix + '.' + datetime.now().strftime('%Y-%m-%d %H-%M-%S') + suffix + ".log"
         fLogfile = open(filename,"w+")
 
         if debug.on(debug.LogfileJson) and prefix == 'FortiusANT':
@@ -144,7 +186,9 @@ def Console (logText):
     Write(logText, True)
 
 def Write (logText, console=False):
-    logText = datetime.utcnow().strftime('%H:%M:%S,%f')[0:12] + ": " + logText
+    logText = datetime.now().strftime('%H:%M:%S,%f')[0:12] + ": " + logText
+    #CF
+    logText = logText.encode('ascii', errors='replace').decode()
     if console: print (logText)
     sys.stdout.flush()
 
@@ -162,8 +206,8 @@ def Write (logText, console=False):
 #       print ("logfile.Write (" + logText + ") called, but logfile is not opened.")
         pass
 
-def WriteJson(QuarterSecond, TacxTrainer, tcx, HeartRate):
-    if debug.on(debug.LogfileJson): LogfileJson.Write(QuarterSecond, TacxTrainer, tcx, HeartRate)
+def WriteJson(QuarterSecond, QuarterCount, TacxTrainer, tcx, wasHR):
+    if debug.on(debug.LogfileJson): LogfileJson.Write(QuarterSecond, QuarterCount, TacxTrainer, tcx, wasHR)
 #-------------------------------------------------------------------------------
 # C l o s e
 #-------------------------------------------------------------------------------
